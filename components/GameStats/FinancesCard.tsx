@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import SubStat from './SubStat';
 import { DollarSign, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
 
 interface SpendingCategory {
@@ -109,14 +108,10 @@ export default function FinancesCard({ level, currentXP, customerId }: FinancesC
     fetchAndAnalyzeTransactions();
   }, [customerId]);
 
-  const essentialPercentage = spendingData 
-    ? Math.round((spendingData.essentialSpending / spendingData.totalSpending) * 100) 
-    : 0;
-
   return (
     <div className="bg-black rounded-2xl p-6 h-full flex flex-col">
       {/* Header */}
-      <div className="flex justify-between items-start mb-4">
+      <div className="flex justify-between items-start mb-2">
         <div>
           <h3 className="text-white text-xl font-light flex items-center gap-2">
             <DollarSign className="w-5 h-5" />
@@ -131,6 +126,17 @@ export default function FinancesCard({ level, currentXP, customerId }: FinancesC
         >
           <RefreshCw className={`w-4 h-4 text-gray-400 ${loading ? 'animate-spin' : ''}`} />
         </button>
+      </div>
+
+      {/* XP Bar */}
+      <div className="w-full mb-4">
+        <div className="w-full bg-gray-600 rounded-full h-2 overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-green-400 to-emerald-400 rounded-full transition-all duration-300"
+            style={{ width: `${xpPercentage}%` }}
+          />
+        </div>
+        <p className="text-gray-400 text-xs mt-1">{currentXP}/100 XP</p>
       </div>
 
       {/* Spending Summary */}
@@ -192,25 +198,6 @@ export default function FinancesCard({ level, currentXP, customerId }: FinancesC
             ))}
           </div>
         )}
-      </div>
-
-      {/* Financial Health Score */}
-      <div className="mt-4 pt-4 border-t border-gray-800">
-        <SubStat 
-          title="Financial Health" 
-          value={essentialPercentage} 
-        />
-      </div>
-
-      {/* XP Bar */}
-      <div className="w-full mt-4">
-        <div className="w-full bg-gray-600 rounded-full h-2 overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-green-400 to-emerald-400 rounded-full transition-all duration-300"
-            style={{ width: `${xpPercentage}%` }}
-          />
-        </div>
-        <p className="text-gray-400 text-xs mt-1">{currentXP}/100 XP</p>
       </div>
     </div>
   );

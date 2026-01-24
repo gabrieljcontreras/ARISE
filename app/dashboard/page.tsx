@@ -8,14 +8,26 @@ import ChatBox from '@/components/ChatBox';
 
 interface StatChanges {
   finances?: { currentXP?: number; level?: number };
-  health?: { currentXP?: number; level?: number; strength?: number; speed?: number; nutrition?: number };
+  health?: { 
+    currentXP?: number; 
+    level?: number; 
+    strength?: number; 
+    speed?: number; 
+    nutrition?: number;
+  };
   intelligence?: { currentXP?: number; level?: number };
 }
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
     finances: { level: 1, currentXP: 0 },
-    health: { level: 1, currentXP: 0, strength: 0, speed: 0, nutrition: 0 },
+    health: { 
+      level: 1, 
+      currentXP: 0, 
+      strength: { level: 1, currentXP: 0 },
+      speed: { level: 1, currentXP: 0 },
+      nutrition: { level: 1, currentXP: 0 }
+    },
     intelligence: { level: 1, currentXP: 0 },
   });
 
@@ -36,18 +48,49 @@ export default function DashboardPage() {
       }
       
       if (changes.health) {
-        newStats.health = {
-          ...newStats.health,
-          currentXP: Math.min(100, Math.max(0, newStats.health.currentXP + (changes.health.currentXP || 0))),
-          strength: Math.min(100, Math.max(0, newStats.health.strength + (changes.health.strength || 0))),
-          speed: Math.min(100, Math.max(0, newStats.health.speed + (changes.health.speed || 0))),
-          nutrition: Math.min(100, Math.max(0, newStats.health.nutrition + (changes.health.nutrition || 0))),
-        };
-        // Level up check
-        if (newStats.health.currentXP >= 100) {
-          newStats.health.level += 1;
-          newStats.health.currentXP -= 100;
+        // Update main health XP
+        let healthXP = newStats.health.currentXP + (changes.health.currentXP || 0);
+        let healthLevel = newStats.health.level;
+        if (healthXP >= 100) {
+          healthLevel += 1;
+          healthXP -= 100;
         }
+        healthXP = Math.min(100, Math.max(0, healthXP));
+
+        // Update strength
+        let strengthXP = newStats.health.strength.currentXP + (changes.health.strength || 0);
+        let strengthLevel = newStats.health.strength.level;
+        if (strengthXP >= 100) {
+          strengthLevel += 1;
+          strengthXP -= 100;
+        }
+        strengthXP = Math.min(100, Math.max(0, strengthXP));
+
+        // Update speed
+        let speedXP = newStats.health.speed.currentXP + (changes.health.speed || 0);
+        let speedLevel = newStats.health.speed.level;
+        if (speedXP >= 100) {
+          speedLevel += 1;
+          speedXP -= 100;
+        }
+        speedXP = Math.min(100, Math.max(0, speedXP));
+
+        // Update nutrition
+        let nutritionXP = newStats.health.nutrition.currentXP + (changes.health.nutrition || 0);
+        let nutritionLevel = newStats.health.nutrition.level;
+        if (nutritionXP >= 100) {
+          nutritionLevel += 1;
+          nutritionXP -= 100;
+        }
+        nutritionXP = Math.min(100, Math.max(0, nutritionXP));
+
+        newStats.health = {
+          level: healthLevel,
+          currentXP: healthXP,
+          strength: { level: strengthLevel, currentXP: strengthXP },
+          speed: { level: speedLevel, currentXP: speedXP },
+          nutrition: { level: nutritionLevel, currentXP: nutritionXP }
+        };
       }
       
       if (changes.intelligence) {
