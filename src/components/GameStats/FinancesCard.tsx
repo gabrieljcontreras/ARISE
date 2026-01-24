@@ -14,16 +14,17 @@ interface SpendingCategory {
 interface FinancesCardProps {
   level: number;
   currentXP: number;
-  customerId?: string;
+  onXPChange?: (xp: number) => void;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
   food: '#22c55e',
+  groceries: '#22c55e',
   rent: '#3b82f6',
+  utilities: '#64748b',
   entertainment: '#f59e0b',
   subscriptions: '#8b5cf6',
   transportation: '#06b6d4',
-  utilities: '#64748b',
   shopping: '#ec4899',
   healthcare: '#ef4444',
   savings: '#00ff88',
@@ -45,37 +46,43 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 type SubTab = 'overview' | 'spending' | 'savings' | 'goals';
 
-export default function FinancesCard({ level, currentXP, customerId }: FinancesCardProps) {
+export default function FinancesCard({ level, currentXP, onXPChange }: FinancesCardProps) {
   const xpPercentage = (currentXP / 100) * 100;
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('overview');
   const [loading, setLoading] = useState(false);
   const [spendingData, setSpendingData] = useState<{
     categories: SpendingCategory[];
     totalSpending: number;
+    totalIncome: number;
     essentialSpending: number;
     discretionarySpending: number;
   } | null>(null);
 
   const fetchAndAnalyzeTransactions = async () => {
-    // Use mock data
-    setSpendingData({
-      categories: [
-        { name: 'Food', amount: 450, percentage: 30, color: CATEGORY_COLORS.food, icon: CATEGORY_ICONS.food },
-        { name: 'Rent', amount: 800, percentage: 35, color: CATEGORY_COLORS.rent, icon: CATEGORY_ICONS.rent },
-        { name: 'Entertainment', amount: 150, percentage: 10, color: CATEGORY_COLORS.entertainment, icon: CATEGORY_ICONS.entertainment },
-        { name: 'Subscriptions', amount: 75, percentage: 5, color: CATEGORY_COLORS.subscriptions, icon: CATEGORY_ICONS.subscriptions },
-        { name: 'Transportation', amount: 200, percentage: 12, color: CATEGORY_COLORS.transportation, icon: CATEGORY_ICONS.transportation },
-        { name: 'Savings', amount: 300, percentage: 8, color: CATEGORY_COLORS.savings, icon: CATEGORY_ICONS.savings },
-      ],
-      totalSpending: 1975,
-      essentialSpending: 1450,
-      discretionarySpending: 525
-    });
+    setLoading(true);
+    // Use mock data for now
+    setTimeout(() => {
+      setSpendingData({
+        categories: [
+          { name: 'Food', amount: 450, percentage: 30, color: CATEGORY_COLORS.food, icon: CATEGORY_ICONS.food },
+          { name: 'Rent', amount: 800, percentage: 35, color: CATEGORY_COLORS.rent, icon: CATEGORY_ICONS.rent },
+          { name: 'Entertainment', amount: 150, percentage: 10, color: CATEGORY_COLORS.entertainment, icon: CATEGORY_ICONS.entertainment },
+          { name: 'Subscriptions', amount: 75, percentage: 5, color: CATEGORY_COLORS.subscriptions, icon: CATEGORY_ICONS.subscriptions },
+          { name: 'Transportation', amount: 200, percentage: 12, color: CATEGORY_COLORS.transportation, icon: CATEGORY_ICONS.transportation },
+          { name: 'Savings', amount: 300, percentage: 8, color: CATEGORY_COLORS.savings, icon: CATEGORY_ICONS.savings },
+        ],
+        totalSpending: 1975,
+        totalIncome: 3500,
+        essentialSpending: 1450,
+        discretionarySpending: 525
+      });
+      setLoading(false);
+    }, 500);
   };
 
   useEffect(() => {
     fetchAndAnalyzeTransactions();
-  }, [customerId]);
+  }, []);
 
   const savingsGoals = [
     { name: 'Emergency Fund', current: 2500, target: 5000, color: '#00ff88' },
@@ -149,8 +156,16 @@ export default function FinancesCard({ level, currentXP, customerId }: FinancesC
         ))}
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex flex-col items-center justify-center h-64 gap-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#00d9ff]"></div>
+          <p className="text-gray-400">Loading financial data...</p>
+        </div>
+      )}
+
       {/* Tab Content */}
-      {activeSubTab === 'overview' && spendingData && (
+      {!loading && activeSubTab === 'overview' && spendingData && (
         <div className="space-y-6" style={{ animation: 'fadeIn 0.3s ease-out' }}>
           {/* Summary Cards */}
           <div className="grid grid-cols-3 gap-4">
@@ -202,7 +217,7 @@ export default function FinancesCard({ level, currentXP, customerId }: FinancesC
         </div>
       )}
 
-      {activeSubTab === 'spending' && spendingData && (
+      {!loading && activeSubTab === 'spending' && spendingData && (
         <div className="space-y-4" style={{ animation: 'fadeIn 0.3s ease-out' }}>
           <h3 className="font-[family-name:var(--font-orbitron)] text-lg text-gray-300 mb-4">Spending by Category</h3>
           {spendingData.categories.map((category) => (
@@ -233,7 +248,7 @@ export default function FinancesCard({ level, currentXP, customerId }: FinancesC
         </div>
       )}
 
-      {activeSubTab === 'savings' && (
+      {!loading && activeSubTab === 'savings' && (
         <div className="space-y-6" style={{ animation: 'fadeIn 0.3s ease-out' }}>
           <div className="text-center p-8 rounded-2xl border border-[#00ff8833] bg-[#00ff8808]">
             <div className="text-5xl mb-4">🏦</div>
@@ -255,7 +270,7 @@ export default function FinancesCard({ level, currentXP, customerId }: FinancesC
         </div>
       )}
 
-      {activeSubTab === 'goals' && (
+      {!loading && activeSubTab === 'goals' && (
         <div className="space-y-4" style={{ animation: 'fadeIn 0.3s ease-out' }}>
           <h3 className="font-[family-name:var(--font-orbitron)] text-lg text-gray-300 mb-4">Financial Goals</h3>
           {savingsGoals.map((goal) => {

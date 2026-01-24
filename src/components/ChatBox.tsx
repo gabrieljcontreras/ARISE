@@ -1,24 +1,63 @@
 'use client';
 
-import { useState } from 'react';
-import { Send, Sparkles } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Send, Target, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface StatChanges {
   finances?: { currentXP?: number; level?: number };
   health?: { currentXP?: number; level?: number; strength?: number; speed?: number; nutrition?: number };
   intelligence?: { currentXP?: number; level?: number };
   message?: string;
+  budgetGoal?: {
+    created: boolean;
+    category?: string;
+    amount?: number;
+    period?: string;
+    goalType?: string;
+  };
+}
+
+interface BudgetGoal {
+  _id: string;
+  category: string;
+  amount: number;
+  currentSpending: number;
+  period: string;
+  percentageUsed: number;
+  remaining: number;
+  daysRemaining: number;
+  status: string;
 }
 
 interface ChatBoxProps {
   onStatChange: (changes: StatChanges) => void;
   questType?: 'financial' | 'health';
+  onBudgetGoalCreated?: () => void;
 }
 
-export default function ChatBox({ onStatChange, questType = 'health' }: ChatBoxProps) {
+export default function ChatBox({ onStatChange, questType = 'health', onBudgetGoalCreated }: ChatBoxProps) {
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string; type?: 'normal' | 'budget' | 'alert' }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeGoals, setActiveGoals] = useState<BudgetGoal[]>([]);
+  const [showGoals, setShowGoals] = useState(false);
+
+  // Fetch active budget goals
+  const fetchBudgetGoals = async () => {
+    try {
+      const response = await fetch('/api/budget-goals');
+      const data = await response.json();
+      if (data.success) {
+        setActiveGoals(data.goals);
+      }
+    } catch (error) {
+      console.error('Failed to fetch budget goals:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchBudgetGoals();
+  }, []);
 
   const isFinancial = questType === 'financial';
   const accentColor = isFinancial ? '#00d9ff' : '#00ff88';
@@ -48,7 +87,21 @@ export default function ChatBox({ onStatChange, questType = 'health' }: ChatBoxP
       const data = await response.json();
       
       if (data.message) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+        // Check if this was a budget goal response
+        const isBudgetGoal = data.budgetGoal?.created;
+        
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: data.message,
+          type: isBudgetGoal ? 'budget' : 'normal'
+        }]);
+        
+        // If budget goal was created, refresh goals list
+        if (isBudgetGoal) {
+          fetchBudgetGoals();
+          onBudgetGoalCreated?.();
+        }
+        
         onStatChange(data);
       } else if (data.error) {
         setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I couldn\'t analyze that.' }]);
@@ -60,25 +113,29 @@ export default function ChatBox({ onStatChange, questType = 'health' }: ChatBoxP
     }
   };
 
+  const getProgressColor = (percentage: number) => {
+    if (percentage >= 90) return 'bg-red-500';
+    if (percentage >= 75) return 'bg-orange-500';
+    if (percentage >= 50) return 'bg-yellow-500';
+    return 'bg-green-500';
+  };
+
+  const getStatusIcon = (percentage: number) => {
+    if (percentage >= 100) return <AlertTriangle className="w-4 h-4 text-red-400" />;
+    if (percentage >= 75) return <AlertTriangle className="w-4 h-4 text-orange-400" />;
+    return <CheckCircle2 className="w-4 h-4 text-green-400" />;
+  };
+
   return (
-    <div 
-      className="rounded-2xl p-5 flex flex-col w-full border"
-      style={{ 
-        background: 'rgba(15, 23, 42, 0.8)',
-        backdropFilter: 'blur(10px)',
-        borderColor: `${accentColor}33`
-      }}
-    >
-      <div className="flex items-center gap-2 mb-4">
-        <Sparkles className="w-5 h-5" style={{ color: accentColor }} />
-        <h3 className="font-[family-name:var(--font-orbitron)] text-white text-sm">Log Achievement</h3>
-      </div>
+    <div className="bg-black/80 rounded-2xl p-4 h-full flex flex-col w-full">
+      <h3 className="text-white text-lg font-semibold mb-3 text-center">Log Your Activity</h3>
       
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-3 mb-4 min-h-[60px] max-h-[120px]">
         {messages.length === 0 && (
-          <p className="text-gray-500 text-xs text-center py-2">
-            {exampleText}
+          <p className="text-gray-400 text-sm text-center mt-8">
+            Tell me what you did today!<br />
+            <span className="text-xs">e.g., "I ran 3 miles" or "I saved $50"</span>
           </p>
         )}
         {messages.map((msg, i) => (
@@ -86,11 +143,13 @@ export default function ChatBox({ onStatChange, questType = 'health' }: ChatBoxP
             key={i}
             className={`p-2 rounded-lg text-xs ${
               msg.role === 'user'
-                ? 'text-[#050814] ml-4 font-medium'
-                : 'bg-white/10 text-gray-200 mr-4 border border-white/10'
+                ? 'bg-purple-600 text-white ml-8'
+                : 'bg-gray-700 text-gray-200 mr-8'
             }`}
             style={msg.role === 'user' ? { background: `linear-gradient(135deg, ${accentColor}, #00d9ff)` } : {}}
           >
+            {msg.type === 'budget' && <Target className="w-4 h-4 inline mr-1" />}
+            {msg.type === 'alert' && <AlertTriangle className="w-4 h-4 inline mr-1" />}
             {msg.content}
           </div>
         ))}

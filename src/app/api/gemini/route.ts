@@ -8,6 +8,107 @@ const MODELS = [
   "gemma-3-27b-it"
 ];
 
+// Budget goal detection patterns
+const BUDGET_PATTERNS = [
+  /spend\s*(no more than|less than|under|at most|max(imum)?)\s*\$?(\d+)/i,
+  /budget\s*\$?(\d+)/i,
+  /limit\s*(my|the)?\s*\w*\s*to\s*\$?(\d+)/i,
+  /\$?(\d+)\s*(or less|max|limit|budget)/i,
+  /spend\s*\$?(\d+)\s*less/i,
+  /cut\s*(back|down)\s*(\w+\s*)?\$?(\d+)/i,
+  /save\s*\$?(\d+)\s*on/i,
+  /reduce\s*(\w+\s*)?spending\s*(by)?\s*\$?(\d+)/i,
+];
+
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  entertainment: ['entertainment', 'movies', 'games', 'gaming', 'streaming', 'netflix', 'spotify', 'fun', 'leisure'],
+  food: ['food', 'eating', 'meals', 'eating out', 'takeout', 'delivery'],
+  dining: ['dining', 'restaurants', 'dinner', 'lunch', 'brunch'],
+  groceries: ['groceries', 'grocery', 'supermarket', 'food shopping'],
+  shopping: ['shopping', 'clothes', 'amazon', 'online shopping', 'retail'],
+  transportation: ['transportation', 'uber', 'lyft', 'gas', 'transit', 'commute'],
+  subscriptions: ['subscriptions', 'subscription', 'monthly', 'recurring'],
+  coffee: ['coffee', 'starbucks', 'cafe', 'caffeine'],
+  alcohol: ['alcohol', 'drinks', 'bar', 'beer', 'wine', 'liquor'],
+  travel: ['travel', 'vacation', 'trips', 'flights', 'hotels'],
+};
+
+const PERIOD_KEYWORDS: Record<string, string[]> = {
+  day: ['today', 'daily', 'per day', 'a day', 'each day'],
+  week: ['week', 'weekly', 'this week', 'per week', 'a week', 'next week'],
+  month: ['month', 'monthly', 'this month', 'per month', 'a month', 'next month'],
+};
+
+function detectBudgetGoal(text: string): { 
+  isBudgetGoal: boolean; 
+  amount?: number; 
+  category?: string; 
+  period?: string;
+  goalType?: 'limit' | 'reduction';
+} | null {
+  const lowerText = text.toLowerCase();
+  
+  // Check if this looks like a budget goal
+  const budgetKeywords = ['spend', 'budget', 'limit', 'save', 'cut', 'reduce', 'no more than', 'less than'];
+  const hasBudgetIntent = budgetKeywords.some(kw => lowerText.includes(kw));
+  
+  if (!hasBudgetIntent) return null;
+
+  // Extract amount
+  let amount: number | undefined;
+  for (const pattern of BUDGET_PATTERNS) {
+    const match = lowerText.match(pattern);
+    if (match) {
+      // Find the number in the match
+      const numMatch = match[0].match(/\$?(\d+)/);
+      if (numMatch) {
+        amount = parseInt(numMatch[1], 10);
+        break;
+      }
+    }
+  }
+
+  if (!amount) {
+    // Try simple number extraction
+    const simpleMatch = lowerText.match(/\$(\d+)/);
+    if (simpleMatch) {
+      amount = parseInt(simpleMatch[1], 10);
+    }
+  }
+
+  if (!amount) return null;
+
+  // Detect category
+  let category: string | undefined;
+  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some(kw => lowerText.includes(kw))) {
+      category = cat;
+      break;
+    }
+  }
+
+  // Detect period
+  let period: string = 'week'; // default to week
+  for (const [p, keywords] of Object.entries(PERIOD_KEYWORDS)) {
+    if (keywords.some(kw => lowerText.includes(kw))) {
+      period = p;
+      break;
+    }
+  }
+
+  // Detect goal type
+  const isReduction = /less|reduce|cut|save\s*\$?\d+\s*on/i.test(lowerText);
+  const goalType = isReduction ? 'reduction' : 'limit';
+
+  return {
+    isBudgetGoal: true,
+    amount,
+    category,
+    period,
+    goalType
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { task } = await request.json();
@@ -21,6 +122,82 @@ export async function POST(request: NextRequest) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
 
+    // Check if this is a budget goal request
+    const budgetGoal = detectBudgetGoal(task);
+    
+    if (budgetGoal && budgetGoal.isBudgetGoal && budgetGoal.amount) {
+      // Handle budget goal creation
+      let category = budgetGoal.category;
+      
+      // If category not detected, use Gemini to determine it
+      if (!category) {
+        try {
+          const categoryPrompt = `What spending category best describes this budget goal? "${task}"
+          
+Choose ONLY from: entertainment, food, dining, groceries, shopping, transportation, subscriptions, coffee, alcohol, travel, other
+
+Return ONLY the category name, nothing else.`;
+          
+          const model = genAI.getGenerativeModel({ model: MODELS[0] });
+          const result = await model.generateContent(categoryPrompt);
+          category = result.response.text().trim().toLowerCase();
+          
+          // Validate it's a valid category
+          const validCategories = ['entertainment', 'food', 'dining', 'groceries', 'shopping', 'transportation', 'subscriptions', 'coffee', 'alcohol', 'travel', 'other'];
+          if (!validCategories.includes(category)) {
+            category = 'other';
+          }
+        } catch {
+          category = 'other';
+        }
+      }
+
+      // Create the budget goal via API
+      try {
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        const goalResponse = await fetch(`${baseUrl}/api/budget-goals`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            goalType: budgetGoal.goalType,
+            category,
+            amount: budgetGoal.amount,
+            period: budgetGoal.period,
+            originalInput: task,
+            motivationMessage: `You've committed to ${budgetGoal.goalType === 'limit' ? 'limiting' : 'reducing'} ${category} spending to $${budgetGoal.amount} per ${budgetGoal.period}. You've got this! 💪`
+          })
+        });
+
+        const goalData = await goalResponse.json();
+
+        if (goalData.success) {
+          const periodText = budgetGoal.period === 'day' ? 'today' : `this ${budgetGoal.period}`;
+          return NextResponse.json({
+            budgetGoal: {
+              created: true,
+              ...goalData.goal
+            },
+            message: `🎯 Budget goal set! I'll track your ${category} spending and alert you when you're getting close to your $${budgetGoal.amount} limit ${periodText}. ${budgetGoal.goalType === 'reduction' ? "Let's beat your previous spending!" : "Stay disciplined!"}`
+          });
+        }
+      } catch (error) {
+        console.error('Failed to create budget goal:', error);
+      }
+
+      // Fallback response if API call fails
+      return NextResponse.json({
+        budgetGoal: {
+          created: false,
+          category,
+          amount: budgetGoal.amount,
+          period: budgetGoal.period,
+          goalType: budgetGoal.goalType
+        },
+        message: `I understand you want to ${budgetGoal.goalType === 'limit' ? 'limit' : 'reduce'} ${category} spending to $${budgetGoal.amount} per ${budgetGoal.period}. I'll help you track this! 📊`
+      });
+    }
+
+    // Regular task analysis (existing logic)
     const prompt = `You are a life gamification assistant. Analyze the following task/activity and determine how it should affect the user's stats.
 
 IMPORTANT: Scale XP rewards based on THREE factors:
