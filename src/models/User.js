@@ -1,0 +1,1 @@
+// Mongoose Schema for User Stats
