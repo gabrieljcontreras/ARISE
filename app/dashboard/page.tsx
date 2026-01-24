@@ -1,76 +1,107 @@
 'use client';
 
 import { useState } from 'react';
-import StatBox from '@/components/GameStats/StatBox';
+import StatCard from '@/components/GameStats/StatCard';
+import HealthCard from '@/components/GameStats/HealthCard';
+import ChatBox from '@/components/ChatBox';
+
+interface StatChanges {
+  finances?: { currentXP?: number; level?: number };
+  health?: { currentXP?: number; level?: number; strength?: number; speed?: number; nutrition?: number };
+  intelligence?: { currentXP?: number; level?: number };
+}
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
-    finances: { level: 1, currentXP: 45, maxXP: 100 },
-    health: { level: 2, currentXP: 20, maxXP: 100 },
-    intelligence: { level: 3, currentXP: 30, maxXP: 100 },
-    strength: { level: 1, currentXP: 75, maxXP: 100 },
+    finances: { level: 1, currentXP: 45 },
+    health: { level: 2, currentXP: 20, strength: 75, speed: 60, nutrition: 85 },
+    intelligence: { level: 3, currentXP: 30 },
   });
 
+  const handleStatChange = (changes: StatChanges) => {
+    setStats(prev => {
+      const newStats = { ...prev };
+      
+      if (changes.finances) {
+        newStats.finances = {
+          ...newStats.finances,
+          currentXP: Math.min(100, Math.max(0, newStats.finances.currentXP + (changes.finances.currentXP || 0))),
+        };
+        // Level up check
+        if (newStats.finances.currentXP >= 100) {
+          newStats.finances.level += 1;
+          newStats.finances.currentXP -= 100;
+        }
+      }
+      
+      if (changes.health) {
+        newStats.health = {
+          ...newStats.health,
+          currentXP: Math.min(100, Math.max(0, newStats.health.currentXP + (changes.health.currentXP || 0))),
+          strength: Math.min(100, Math.max(0, newStats.health.strength + (changes.health.strength || 0))),
+          speed: Math.min(100, Math.max(0, newStats.health.speed + (changes.health.speed || 0))),
+          nutrition: Math.min(100, Math.max(0, newStats.health.nutrition + (changes.health.nutrition || 0))),
+        };
+        // Level up check
+        if (newStats.health.currentXP >= 100) {
+          newStats.health.level += 1;
+          newStats.health.currentXP -= 100;
+        }
+      }
+      
+      if (changes.intelligence) {
+        newStats.intelligence = {
+          ...newStats.intelligence,
+          currentXP: Math.min(100, Math.max(0, newStats.intelligence.currentXP + (changes.intelligence.currentXP || 0))),
+        };
+        // Level up check
+        if (newStats.intelligence.currentXP >= 100) {
+          newStats.intelligence.level += 1;
+          newStats.intelligence.currentXP -= 100;
+        }
+      }
+      
+      return newStats;
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-8">
-      <div className="relative w-full max-w-2xl">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-4 gap-12 items-center justify-center">
-          {/* Top Left - Finances */}
-          <div className="col-start-1 row-start-1 justify-self-center">
-            <StatBox
-              title="Finances"
-              level={stats.finances.level}
-              currentXP={stats.finances.currentXP}
-              maxXP={stats.finances.maxXP}
-              color="text-blue-400"
-            />
-          </div>
-
-          {/* Top Right - Health */}
-          <div className="col-start-4 row-start-1 justify-self-center">
-            <StatBox
-              title="Health"
-              level={stats.health.level}
-              currentXP={stats.health.currentXP}
-              maxXP={stats.health.maxXP}
-              color="text-purple-400"
-            />
-          </div>
-
-          {/* Center - Avatar */}
-          <div className="col-start-2 col-span-2 row-start-1 flex justify-center">
-            <div className="w-40 h-40 bg-black rounded-full flex items-center justify-center">
-              <div className="w-32 h-32 bg-black rounded-full border-4 border-gray-700 flex flex-col items-center justify-center">
-                <div className="w-16 h-16 bg-gray-800 rounded-full mb-2" />
-                <div className="w-12 h-3 bg-gray-800 rounded-full mb-1" />
-                <div className="flex gap-8 mt-4">
-                  <div className="w-3 h-20 bg-gray-800 rounded-full" />
-                  <div className="w-3 h-20 bg-gray-800 rounded-full" />
-                </div>
-              </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500 px-6 pt-12 pb-12">
+      <div className="max-w-full">
+        <div className="grid grid-cols-3 gap-12 items-center pt-8">
+          {/* Left Column - Finances (extended) */}
+          <div className="flex flex-col">
+            <div className="h-[80vh]">
+              <StatCard
+                title="Finances"
+                level={stats.finances.level}
+                currentXP={stats.finances.currentXP}
+              />
             </div>
           </div>
 
-          {/* Bottom Left - Intelligence */}
-          <div className="col-start-1 row-start-2 justify-self-center mt-12">
-            <StatBox
+          {/* Center - ChatBox */}
+          <div className="flex flex-col justify-end items-center h-[80vh]">
+            <div className="h-[40vh] w-full">
+              <ChatBox onStatChange={handleStatChange} />
+            </div>
+          </div>
+
+          {/* Right Column - Health and Intelligence */}
+          <div className="space-y-8 flex flex-col">
+            <div className="h-[60vh]">
+              <HealthCard
+                level={stats.health.level}
+                currentXP={stats.health.currentXP}
+                strength={stats.health.strength}
+                speed={stats.health.speed}
+                nutrition={stats.health.nutrition}
+              />
+            </div>
+            <StatCard
               title="Intelligence"
               level={stats.intelligence.level}
               currentXP={stats.intelligence.currentXP}
-              maxXP={stats.intelligence.maxXP}
-              color="text-indigo-400"
-            />
-          </div>
-
-          {/* Bottom Right - Strength */}
-          <div className="col-start-4 row-start-2 justify-self-center mt-12">
-            <StatBox
-              title="Strength"
-              level={stats.strength.level}
-              currentXP={stats.strength.currentXP}
-              maxXP={stats.strength.maxXP}
-              color="text-orange-400"
             />
           </div>
         </div>
