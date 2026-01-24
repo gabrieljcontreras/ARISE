@@ -47,4 +47,4 @@ def create_arise_structure():
     print("2. Install dependencies: npm install mongodb mongoose lucide-react framer-motion")
 
 if __name__ == "__main__":
-    create_arise_structure()
+    create_arise_structure()    
