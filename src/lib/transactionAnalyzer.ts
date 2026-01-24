@@ -94,7 +94,13 @@ export function analyzePurchase(
 ): TransactionJudgment {
   const description = purchase.description?.toLowerCase() || '';
   const merchantName = merchant?.name?.toLowerCase() || '';
-  const merchantCategories = merchant?.category?.map(c => c.toLowerCase()) || [];
+  // Handle category as string, array, or undefined (API may return different types)
+  const rawCategory = merchant?.category as string[] | string | undefined;
+  const merchantCategories: string[] = Array.isArray(rawCategory) 
+    ? rawCategory.map(c => c.toLowerCase()) 
+    : typeof rawCategory === 'string' 
+      ? [rawCategory.toLowerCase()]
+      : [];
   const amount = purchase.amount;
 
   let isBad = false;

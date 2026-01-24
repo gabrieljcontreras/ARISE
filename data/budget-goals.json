@@ -1,0 +1,53 @@
+{
+  "goals": [
+    {
+      "id": "mksvutwtjbid9v9pj0c",
+      "goalType": "limit",
+      "category": "dining",
+      "amount": 100,
+      "period": "week",
+      "startDate": "2026-01-24T22:30:16.301Z",
+      "endDate": "2026-01-31T22:30:16.301Z",
+      "currentSpending": 95,
+      "alertThresholds": [
+        50,
+        75,
+        90,
+        100
+      ],
+      "alertsTriggered": [
+        50,
+        75,
+        90
+      ],
+      "status": "active",
+      "createdAt": "2026-01-24T22:30:16.301Z",
+      "updatedAt": "2026-01-24T22:36:59.408Z"
+    },
+    {
+      "id": "mksw44cruuor0ac3k7",
+      "goalType": "limit",
+      "category": "food",
+      "amount": 70,
+      "period": "month",
+      "startDate": "2026-01-24T22:37:29.739Z",
+      "endDate": "2026-02-24T22:37:29.739Z",
+      "currentSpending": 150.5,
+      "alertThresholds": [
+        50,
+        75,
+        90,
+        100
+      ],
+      "alertsTriggered": [
+        50,
+        75,
+        90,
+        100
+      ],
+      "status": "exceeded",
+      "createdAt": "2026-01-24T22:37:29.739Z",
+      "updatedAt": "2026-01-24T22:37:30.417Z"
+    }
+  ]
+}
