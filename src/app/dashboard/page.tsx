@@ -19,7 +19,7 @@ interface StatChanges {
 type ViewState = 'landing' | 'choose-quest' | 'financial-quest' | 'health-quest';
 type ExpandedStat = string | null;
 
-// Define daily quests
+// Define daily quests interface
 interface DailyQuest {
   id: string;
   text: string;
@@ -27,47 +27,35 @@ interface DailyQuest {
   category: 'financial' | 'health';
 }
 
-const FINANCIAL_QUESTS: DailyQuest[] = [
-  { id: 'f1', text: 'Log today\'s expenses', xp: 10, category: 'financial' },
-  { id: 'f2', text: 'Review your budget', xp: 15, category: 'financial' },
-  { id: 'f3', text: 'Check savings goal', xp: 10, category: 'financial' },
-  { id: 'f4', text: 'Research investments', xp: 20, category: 'financial' },
-];
-
-const HEALTH_QUESTS: DailyQuest[] = [
-  { id: 'h1', text: 'Complete a workout', xp: 20, category: 'health' },
-  { id: 'h2', text: 'Log your meals', xp: 15, category: 'health' },
-  { id: 'h3', text: 'Drink 8 glasses of water', xp: 10, category: 'health' },
-  { id: 'h4', text: 'Get 7+ hours of sleep', xp: 15, category: 'health' },
-];
-
 export default function DashboardPage() {
   const [view, setView] = useState<ViewState>('landing');
   const [expandedStat, setExpandedStat] = useState<ExpandedStat>(null);
   const [completedQuests, setCompletedQuests] = useState<Set<string>>(new Set());
+  const [financialQuests, setFinancialQuests] = useState<DailyQuest[]>([]);
+  const [healthQuests, setHealthQuests] = useState<DailyQuest[]>([]);
   const [stats, setStats] = useState({
     finances: { 
-      level: 12, 
-      currentXP: 75,
-      savings: { level: 8, currentXP: 60, amount: 5420 },
-      budget: { level: 10, currentXP: 80, spent: 1250, limit: 2000 },
-      investments: { level: 5, currentXP: 35, value: 12500, growth: 8.5 },
-      debts: { level: 7, currentXP: 45, remaining: 3200, paid: 6800 }
+      level: 1, 
+      currentXP: 0,
+      savings: { level: 1, currentXP: 0, amount: 0 },
+      budget: { level: 1, currentXP: 0, spent: 0, limit: 2000 },
+      investments: { level: 1, currentXP: 0, value: 0, growth: 0 },
+      debts: { level: 1, currentXP: 0, remaining: 0, paid: 0 }
     },
     health: { 
-      level: 8, 
-      currentXP: 82, 
-      strength: { level: 6, currentXP: 45, workouts: 12, maxLift: 225 },
-      speed: { level: 5, currentXP: 60, runs: 8, bestMile: '7:32' },
-      nutrition: { level: 7, currentXP: 30, calories: 2100, protein: 140 },
-      sleep: { level: 6, currentXP: 55, avgHours: 7.2, quality: 82 }
+      level: 1, 
+      currentXP: 0, 
+      strength: { level: 1, currentXP: 0, workouts: 0, maxLift: 0 },
+      speed: { level: 1, currentXP: 0, runs: 0, bestMile: '--:--' },
+      nutrition: { level: 1, currentXP: 0, calories: 0, protein: 0 },
+      sleep: { level: 1, currentXP: 0, avgHours: 0, quality: 0 }
     },
-    intelligence: { level: 10, currentXP: 65 },
+    intelligence: { level: 1, currentXP: 0 },
   });
 
-  const totalXP = (stats.finances.level * 100 + stats.finances.currentXP) + 
-                  (stats.health.level * 100 + stats.health.currentXP) + 
-                  (stats.intelligence.level * 100 + stats.intelligence.currentXP);
+  const totalXP = ((stats.finances.level - 1) * 100 + stats.finances.currentXP) + 
+                  ((stats.health.level - 1) * 100 + stats.health.currentXP) + 
+                  ((stats.intelligence.level - 1) * 100 + stats.intelligence.currentXP);
 
   const handleStatChange = (changes: StatChanges) => {
     setStats(prev => {
@@ -143,27 +131,24 @@ export default function DashboardPage() {
   };
 
   const toggleQuestCompletion = (questId: string, xp: number, category: 'financial' | 'health') => {
-    setCompletedQuests(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(questId)) {
-        newSet.delete(questId);
-        // Remove XP when uncompleting
-        if (category === 'financial') {
-          handleStatChange({ finances: { currentXP: -xp } });
-        } else {
-          handleStatChange({ health: { currentXP: -xp } });
-        }
-      } else {
-        newSet.add(questId);
-        // Add XP when completing
-        if (category === 'financial') {
-          handleStatChange({ finances: { currentXP: xp } });
-        } else {
-          handleStatChange({ health: { currentXP: xp } });
-        }
-      }
-      return newSet;
-    });
+    // Add XP when completing
+    if (category === 'financial') {
+      handleStatChange({ finances: { currentXP: xp } });
+      // Remove the quest from the list
+      setFinancialQuests(prev => prev.filter(q => q.id !== questId));
+    } else {
+      handleStatChange({ health: { currentXP: xp } });
+      // Remove the quest from the list
+      setHealthQuests(prev => prev.filter(q => q.id !== questId));
+    }
+  };
+
+  const handleQuestCreated = (quest: DailyQuest) => {
+    if (quest.category === 'financial') {
+      setFinancialQuests(prev => [...prev, quest]);
+    } else {
+      setHealthQuests(prev => [...prev, quest]);
+    }
   };
 
   const overallLevel = Math.floor((stats.finances.level + stats.health.level + stats.intelligence.level) / 3);
@@ -578,7 +563,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* ChatBox */}
-                  <ChatBox onStatChange={handleStatChange} questType="financial" />
+                  <ChatBox onStatChange={handleStatChange} questType="financial" onQuestCreated={handleQuestCreated} />
                 </div>
               </div>
 
@@ -593,19 +578,26 @@ export default function DashboardPage() {
                 >
                   <h3 className="font-[family-name:var(--font-orbitron)] text-lg font-bold mb-4 text-[#00d9ff]">📋 Daily Quests</h3>
                   <div className="space-y-3">
-                    {FINANCIAL_QUESTS.map(quest => (
-                      <QuestItem 
-                        key={quest.id}
-                        text={quest.text} 
-                        xp={quest.xp} 
-                        completed={completedQuests.has(quest.id)}
-                        onClick={() => toggleQuestCompletion(quest.id, quest.xp, quest.category)}
-                      />
-                    ))}
+                    {financialQuests.length === 0 ? (
+                      <p className="text-gray-400 text-sm text-center py-4">
+                        No quests yet! Use the chat to add one.<br />
+                        <span className="text-xs text-gray-500">Try: &quot;Add quest to review my budget&quot;</span>
+                      </p>
+                    ) : (
+                      financialQuests.map(quest => (
+                        <QuestItem 
+                          key={quest.id}
+                          text={quest.text} 
+                          xp={quest.xp} 
+                          completed={completedQuests.has(quest.id)}
+                          onClick={() => toggleQuestCompletion(quest.id, quest.xp, quest.category)}
+                        />
+                      ))
+                    )}
                   </div>
                   <div className="mt-6 p-4 rounded-xl bg-[#00d9ff]/10 border border-[#00d9ff]/30">
                     <p className="text-sm text-gray-300">
-                      💡 <span className="text-[#00d9ff] font-medium">Tip:</span> Consistent budgeting can boost your Financial Power by 50%!
+                      💡 <span className="text-[#00d9ff] font-medium">Tip:</span> Add quests via chat: &quot;Add quest to track expenses&quot;
                     </p>
                   </div>
                 </div>
@@ -626,7 +618,7 @@ export default function DashboardPage() {
               </h2>
               <p className="text-center text-gray-400 mb-8">Click on any stat to expand and see more details</p>
 
-              <div className="grid lg:grid-cols-2 gap-6">
+              <div className="grid lg:grid-cols-2 gap-6 items-start">
                 {/* Savings Stat */}
                 <InteractiveStat
                   id="savings"
@@ -831,7 +823,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* ChatBox */}
-                  <ChatBox onStatChange={handleStatChange} questType="health" />
+                  <ChatBox onStatChange={handleStatChange} questType="health" onQuestCreated={handleQuestCreated} />
                 </div>
               </div>
 
@@ -846,19 +838,26 @@ export default function DashboardPage() {
                 >
                   <h3 className="font-[family-name:var(--font-orbitron)] text-lg font-bold mb-4 text-[#00ff88]">📋 Daily Quests</h3>
                   <div className="space-y-3">
-                    {HEALTH_QUESTS.map(quest => (
-                      <QuestItem 
-                        key={quest.id}
-                        text={quest.text} 
-                        xp={quest.xp} 
-                        completed={completedQuests.has(quest.id)}
-                        onClick={() => toggleQuestCompletion(quest.id, quest.xp, quest.category)}
-                      />
-                    ))}
+                    {healthQuests.length === 0 ? (
+                      <p className="text-gray-400 text-sm text-center py-4">
+                        No quests yet! Use the chat to add one.<br />
+                        <span className="text-xs text-gray-500">Try: &quot;Add quest to drink 8 glasses of water&quot;</span>
+                      </p>
+                    ) : (
+                      healthQuests.map(quest => (
+                        <QuestItem 
+                          key={quest.id}
+                          text={quest.text} 
+                          xp={quest.xp} 
+                          completed={completedQuests.has(quest.id)}
+                          onClick={() => toggleQuestCompletion(quest.id, quest.xp, quest.category)}
+                        />
+                      ))
+                    )}
                   </div>
                   <div className="mt-6 p-4 rounded-xl bg-[#00ff88]/10 border border-[#00ff88]/30">
                     <p className="text-sm text-gray-300">
-                      💡 <span className="text-[#00ff88] font-medium">Tip:</span> Consistent sleep schedules can boost your Health Vitality by 30%!
+                      💡 <span className="text-[#00ff88] font-medium">Tip:</span> Add quests via chat: &quot;Add quest to run 5k&quot;
                     </p>
                   </div>
                 </div>
@@ -879,7 +878,7 @@ export default function DashboardPage() {
               </h2>
               <p className="text-center text-gray-400 mb-8">Click on any stat to expand and see more details</p>
 
-              <div className="grid lg:grid-cols-2 gap-6">
+              <div className="grid lg:grid-cols-2 gap-6 items-start">
                 {/* Strength Stat */}
                 <InteractiveStat
                   id="strength"

@@ -15,6 +15,13 @@ interface StatChanges {
     period?: string;
     goalType?: string;
   };
+  dailyQuest?: {
+    created: boolean;
+    id: string;
+    text: string;
+    xp: number;
+    category: 'financial' | 'health';
+  };
 }
 
 interface BudgetGoal {
@@ -29,13 +36,21 @@ interface BudgetGoal {
   status: string;
 }
 
+interface DailyQuest {
+  id: string;
+  text: string;
+  xp: number;
+  category: 'financial' | 'health';
+}
+
 interface ChatBoxProps {
   onStatChange: (changes: StatChanges) => void;
   questType?: 'financial' | 'health';
   onBudgetGoalCreated?: () => void;
+  onQuestCreated?: (quest: DailyQuest) => void;
 }
 
-export default function ChatBox({ onStatChange, questType = 'health', onBudgetGoalCreated }: ChatBoxProps) {
+export default function ChatBox({ onStatChange, questType = 'health', onBudgetGoalCreated, onQuestCreated }: ChatBoxProps) {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string; type?: 'normal' | 'budget' | 'alert' }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -87,19 +102,25 @@ export default function ChatBox({ onStatChange, questType = 'health', onBudgetGo
       const data = await response.json();
       
       if (data.message) {
-        // Check if this was a budget goal response
+        // Check if this was a budget goal response or quest creation
         const isBudgetGoal = data.budgetGoal?.created;
+        const isQuestCreated = data.dailyQuest?.created;
         
         setMessages(prev => [...prev, { 
           role: 'assistant', 
           content: data.message,
-          type: isBudgetGoal ? 'budget' : 'normal'
+          type: isBudgetGoal ? 'budget' : isQuestCreated ? 'budget' : 'normal'
         }]);
         
         // If budget goal was created, refresh goals list
         if (isBudgetGoal) {
           fetchBudgetGoals();
           onBudgetGoalCreated?.();
+        }
+        
+        // If quest was created, call the callback
+        if (isQuestCreated && data.dailyQuest) {
+          onQuestCreated?.(data.dailyQuest);
         }
         
         onStatChange(data);

@@ -39,6 +39,67 @@ const PERIOD_KEYWORDS: Record<string, string[]> = {
   month: ['month', 'monthly', 'this month', 'per month', 'a month', 'next month'],
 };
 
+// Quest detection patterns - expanded to catch intent phrases
+const QUEST_PATTERNS = [
+  /add\s*(a\s*)?(daily\s*)?quest/i,
+  /create\s*(a\s*)?(daily\s*)?quest/i,
+  /new\s*(daily\s*)?quest/i,
+  /set\s*(a\s*)?(daily\s*)?quest/i,
+  /add\s*(a\s*)?goal/i,
+  /add\s*(a\s*)?task/i,
+  /remind\s*me\s*to/i,
+  /i\s*want\s*to/i,
+  /i\s*plan\s*to/i,
+  /i\s*need\s*to/i,
+  /i\s*should/i,
+  /i\s*will/i,
+  /i('m|\s*am)\s*going\s*to/i,
+  /i\s*have\s*to/i,
+  /i\s*gotta/i,
+  /i('d|\s*would)\s*like\s*to/i,
+  /my\s*goal\s*is\s*to/i,
+  /today\s*i('ll|\s*will)/i,
+];
+
+function detectQuestCreation(text: string, questType: 'financial' | 'health'): {
+  isQuest: boolean;
+  questText?: string;
+  xp?: number;
+} | null {
+  const lowerText = text.toLowerCase();
+  
+  // Check if this looks like a quest creation request
+  const hasQuestIntent = QUEST_PATTERNS.some(pattern => pattern.test(lowerText));
+  
+  if (!hasQuestIntent) return null;
+
+  // Extract the quest description - remove the "add quest" prefix
+  let questText = text
+    .replace(/add\s*(a\s*)?(daily\s*)?quest\s*(to\s*)?/i, '')
+    .replace(/create\s*(a\s*)?(daily\s*)?quest\s*(to\s*)?/i, '')
+    .replace(/new\s*(daily\s*)?quest\s*(to\s*)?/i, '')
+    .replace(/set\s*(a\s*)?(daily\s*)?quest\s*(to\s*)?/i, '')
+    .replace(/add\s*(a\s*)?goal\s*(to\s*)?/i, '')
+    .replace(/add\s*(a\s*)?task\s*(to\s*)?/i, '')
+    .replace(/remind\s*me\s*to\s*/i, '')
+    .replace(/i\s*want\s*to\s*/i, '')
+    .trim();
+
+  // Capitalize first letter
+  if (questText) {
+    questText = questText.charAt(0).toUpperCase() + questText.slice(1);
+  }
+
+  // Default XP based on quest type
+  const xp = questType === 'financial' ? 15 : 20;
+
+  return {
+    isQuest: true,
+    questText: questText || 'Complete daily task',
+    xp
+  };
+}
+
 function detectBudgetGoal(text: string): { 
   isBudgetGoal: boolean; 
   amount?: number; 
@@ -111,7 +172,7 @@ function detectBudgetGoal(text: string): {
 
 export async function POST(request: NextRequest) {
   try {
-    const { task } = await request.json();
+    const { task, questType = 'health' } = await request.json();
     
     const apiKey = process.env.GEMINI_API_KEY;
     
@@ -121,6 +182,62 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
+
+    // Check if this is a quest creation request FIRST
+    const questCreation = detectQuestCreation(task, questType);
+    
+    if (questCreation && questCreation.isQuest) {
+      // Use Gemini to format the quest nicely
+      let formattedQuestText = questCreation.questText || 'Complete daily task';
+      let xpReward = questCreation.xp || 15;
+      
+      try {
+        const formatPrompt = `Format this into a clean, concise daily quest title (3-7 words max). Make it action-oriented and motivating.
+
+User input: "${task}"
+Quest type: ${questType}
+
+Examples of good quest titles:
+- "Run 5 kilometers"
+- "Review monthly budget"
+- "Drink 8 glasses of water"
+- "Track all expenses today"
+- "Complete 30 min workout"
+- "Meal prep for the week"
+
+Also estimate XP reward (10-30) based on difficulty/effort required.
+
+Return ONLY valid JSON in this exact format:
+{"title": "Your quest title here", "xp": 15}`;
+
+        const model = genAI.getGenerativeModel({ model: MODELS[0] });
+        const result = await model.generateContent(formatPrompt);
+        let responseText = result.response.text().trim();
+        responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        
+        const parsed = JSON.parse(responseText);
+        if (parsed.title) {
+          formattedQuestText = parsed.title;
+        }
+        if (parsed.xp && typeof parsed.xp === 'number') {
+          xpReward = Math.min(30, Math.max(10, parsed.xp));
+        }
+      } catch (error) {
+        console.log('Quest formatting fallback:', error);
+        // Keep the basic parsed text if Gemini fails
+      }
+      
+      return NextResponse.json({
+        dailyQuest: {
+          created: true,
+          id: `quest_${Date.now()}`,
+          text: formattedQuestText,
+          xp: xpReward,
+          category: questType
+        },
+        message: `✅ Quest added: "${formattedQuestText}" (+${xpReward} XP when completed)`
+      });
+    }
 
     // Check if this is a budget goal request
     const budgetGoal = detectBudgetGoal(task);
@@ -202,55 +319,71 @@ Return ONLY the category name, nothing else.`;
 
 IMPORTANT: Scale XP rewards based on THREE factors:
 1. DURATION - How long the activity took
-2. INTENSITY/EFFORT - Physical or mental exertion required
-3. COMPLEXITY/DIFFICULTY - How challenging the subject matter or activity is
+2. INTENSITY/EFFORT - Physical or mental exertion required  
+3. COMPLEXITY/DIFFICULTY - How challenging the activity is
 
-XP SCALING GUIDE:
-Base XP by duration:
-- Quick tasks (5-30 min): 5-15 base XP
-- Medium tasks (30 min - 2 hours): 15-30 base XP  
-- Long tasks (2-4 hours): 30-50 base XP
-- Very long tasks (4+ hours): 50-75 base XP
+=== HEALTH ACTIVITY SCALING ===
 
-Then multiply by complexity modifier:
-- Easy/Basic (algebra 1, light jog, basic cooking): 1.0x
-- Moderate (calculus, weight training, intermediate recipes): 1.3x
-- Challenging (organic chemistry, HIIT, gourmet cooking): 1.6x
-- Advanced (quantum physics, marathon training, professional skills): 2.0x
-- Expert (PhD-level research, Olympic training, mastery-level skills): 2.5x
+DURATION BASE XP:
+- Quick (5-15 min): 5-10 XP
+- Short (15-30 min): 10-20 XP
+- Medium (30-60 min): 20-35 XP
+- Long (1-2 hours): 35-50 XP
+- Very Long (2+ hours): 50-80 XP
 
-EXAMPLES:
-- "Studied algebra 1 for 2 hours" = 25 base × 1.0 = 25 XP
-- "Studied quantum physics for 2 hours" = 25 base × 2.0 = 50 XP
-- "Jogged for 30 min" = 20 base × 1.0 = 20 XP
-- "Did CrossFit for 30 min" = 20 base × 1.5 = 30 XP
-- "Read a novel for 1 hour" = 15 base × 1.0 = 15 XP
-- "Read academic papers for 1 hour" = 15 base × 1.8 = 27 XP
+INTENSITY MULTIPLIER:
+- Light (walking, stretching, yoga): 1.0x
+- Moderate (jogging, swimming, cycling): 1.3x
+- High (running, weight lifting, sports): 1.6x
+- Intense (HIIT, CrossFit, sprints, heavy lifting): 2.0x
+- Extreme (marathon, competition, max effort): 2.5x
+
+HEALTH SUB-STATS (1-15 scale based on activity type & intensity):
+- strength: weightlifting, pushups, resistance training, climbing
+- speed: running, sprinting, cycling, cardio, HIIT
+- nutrition: meal prep, healthy eating, tracking macros, cooking
+
+HEALTH EXAMPLES:
+- "Walked for 20 minutes" = 12 base × 1.0 = 12 XP, speed: 2, strength: 1
+- "Jogged for 30 minutes" = 20 base × 1.3 = 26 XP, speed: 5, strength: 2
+- "Ran 5 miles" = 35 base × 1.6 = 56 XP, speed: 8, strength: 3
+- "Did 50 pushups" = 15 base × 1.6 = 24 XP, strength: 6, speed: 1
+- "Heavy deadlifts for 45 min" = 30 base × 2.0 = 60 XP, strength: 12, speed: 2
+- "1 hour CrossFit class" = 35 base × 2.0 = 70 XP, strength: 10, speed: 8
+- "Did yoga for 30 min" = 20 base × 1.0 = 20 XP, strength: 3, speed: 1
+- "Meal prepped healthy lunches" = 25 XP, nutrition: 8
+- "Ate a salad for lunch" = 10 XP, nutrition: 4
+- "Tracked all my macros today" = 15 XP, nutrition: 5
+- "Drank 8 glasses of water" = 10 XP, nutrition: 3
+- "Ran a marathon" = 80 base × 2.5 = 200 XP, speed: 15, strength: 8
+
+=== FINANCIAL ACTIVITY SCALING ===
+- Basic (checking balance, small savings): 10-20 XP
+- Moderate (budgeting, expense tracking): 20-35 XP
+- Advanced (investing, tax planning): 35-60 XP
+- Expert (portfolio rebalancing, complex investments): 60-100 XP
+
+=== INTELLIGENCE ACTIVITY SCALING ===
+- Easy subjects (basic skills, casual reading): 1.0x
+- Moderate (intermediate topics, focused study): 1.3x
+- Challenging (advanced subjects, complex skills): 1.6x
+- Expert (PhD-level, highly technical): 2.0-2.5x
 
 The stats are:
-- finances: { level, currentXP } - for money-related activities. Scale by amount AND complexity (investing > saving > budgeting).
-- health: { level, currentXP, strength, speed, nutrition } - for health activities. Scale by duration AND intensity.
-- intelligence: { level, currentXP } - for learning activities. Scale by time AND subject difficulty.
+- finances: { level, currentXP } - for money-related activities
+- health: { level, currentXP, strength, speed, nutrition } - for health activities
+- intelligence: { level, currentXP } - for learning activities
 
-Return ONLY a valid JSON object with the stat changes. Use positive numbers for boosts and negative for penalties. Only include stats that should change. Sub-stats (strength, speed, nutrition) changes should be between 1-15 based on intensity.
+Return ONLY a valid JSON object with the stat changes. Use positive numbers for boosts. Only include stats that should change.
 
-Example response for "I studied algebra for 2 hours":
-{"intelligence": {"currentXP": 25}, "message": "Solid math practice! +25 Intelligence XP"}
+Example response for "I ran for 30 minutes":
+{"health": {"currentXP": 30, "speed": 6, "strength": 2}, "message": "Great cardio session! +30 Health XP 🏃"}
 
-Example response for "I studied quantum physics for 2 hours":
-{"intelligence": {"currentXP": 50}, "message": "Quantum physics is seriously challenging! +50 Intelligence XP"}
+Example response for "I did heavy squats and bench press for an hour":
+{"health": {"currentXP": 65, "strength": 12, "speed": 2}, "message": "Beast mode! Heavy lifting pays off! +65 Health XP 💪"}
 
-Example response for "I went for a light jog for 30 minutes":
-{"health": {"currentXP": 20, "speed": 4, "strength": 2}, "message": "Nice easy run! +20 Health XP"}
-
-Example response for "I did intense HIIT training for 30 minutes":
-{"health": {"currentXP": 35, "speed": 6, "strength": 8}, "message": "HIIT is brutal! Great work! +35 Health XP"}
-
-Example response for "I saved $100":
-{"finances": {"currentXP": 20}, "message": "Smart saving! +20 Finance XP"}
-
-Example response for "I invested $100 in index funds":
-{"finances": {"currentXP": 35}, "message": "Investing takes knowledge! +35 Finance XP"}
+Example response for "I ate a healthy breakfast with eggs and vegetables":
+{"health": {"currentXP": 12, "nutrition": 5}, "message": "Fueling your body right! +12 Health XP 🥗"}
 
 Now analyze this task: "${task}"`;
 
