@@ -13,9 +13,9 @@ interface StatChanges {
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
-    finances: { level: 1, currentXP: 45 },
-    health: { level: 2, currentXP: 20, strength: 75, speed: 60, nutrition: 85 },
-    intelligence: { level: 3, currentXP: 30 },
+    finances: { level: 1, currentXP: 0 },
+    health: { level: 1, currentXP: 0, strength: 0, speed: 0, nutrition: 0 },
+    intelligence: { level: 1, currentXP: 0 },
   });
 
   const handleStatChange = (changes: StatChanges) => {

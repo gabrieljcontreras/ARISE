@@ -21,23 +21,59 @@ export async function POST(request: NextRequest) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
 
-    const prompt = `You are a life gamification assistant. Analyze the following task/activity and determine how it should affect the user's stats. 
-                  
+    const prompt = `You are a life gamification assistant. Analyze the following task/activity and determine how it should affect the user's stats.
+
+IMPORTANT: Scale XP rewards based on THREE factors:
+1. DURATION - How long the activity took
+2. INTENSITY/EFFORT - Physical or mental exertion required
+3. COMPLEXITY/DIFFICULTY - How challenging the subject matter or activity is
+
+XP SCALING GUIDE:
+Base XP by duration:
+- Quick tasks (5-30 min): 5-15 base XP
+- Medium tasks (30 min - 2 hours): 15-30 base XP  
+- Long tasks (2-4 hours): 30-50 base XP
+- Very long tasks (4+ hours): 50-75 base XP
+
+Then multiply by complexity modifier:
+- Easy/Basic (algebra 1, light jog, basic cooking): 1.0x
+- Moderate (calculus, weight training, intermediate recipes): 1.3x
+- Challenging (organic chemistry, HIIT, gourmet cooking): 1.6x
+- Advanced (quantum physics, marathon training, professional skills): 2.0x
+- Expert (PhD-level research, Olympic training, mastery-level skills): 2.5x
+
+EXAMPLES:
+- "Studied algebra 1 for 2 hours" = 25 base × 1.0 = 25 XP
+- "Studied quantum physics for 2 hours" = 25 base × 2.0 = 50 XP
+- "Jogged for 30 min" = 20 base × 1.0 = 20 XP
+- "Did CrossFit for 30 min" = 20 base × 1.5 = 30 XP
+- "Read a novel for 1 hour" = 15 base × 1.0 = 15 XP
+- "Read academic papers for 1 hour" = 15 base × 1.8 = 27 XP
+
 The stats are:
-- finances: { level, currentXP } - for money-related activities (saving, earning, investing)
-- health: { level, currentXP, strength, speed, nutrition } - for health activities (exercise, eating healthy, sleep)
-- intelligence: { level, currentXP } - for learning activities (reading, studying, courses)
+- finances: { level, currentXP } - for money-related activities. Scale by amount AND complexity (investing > saving > budgeting).
+- health: { level, currentXP, strength, speed, nutrition } - for health activities. Scale by duration AND intensity.
+- intelligence: { level, currentXP } - for learning activities. Scale by time AND subject difficulty.
 
-Return ONLY a valid JSON object with the stat changes. Use positive numbers for boosts and negative for penalties. Only include stats that should change. XP changes should be between 5-25 points. Sub-stats (strength, speed, nutrition) are percentages 0-100.
+Return ONLY a valid JSON object with the stat changes. Use positive numbers for boosts and negative for penalties. Only include stats that should change. Sub-stats (strength, speed, nutrition) changes should be between 1-15 based on intensity.
 
-Example response for "I had 1lb of salmon":
-{"health": {"currentXP": 15, "nutrition": 10}, "message": "Great protein choice! +15 Health XP, +10% Nutrition"}
+Example response for "I studied algebra for 2 hours":
+{"intelligence": {"currentXP": 25}, "message": "Solid math practice! +25 Intelligence XP"}
+
+Example response for "I studied quantum physics for 2 hours":
+{"intelligence": {"currentXP": 50}, "message": "Quantum physics is seriously challenging! +50 Intelligence XP"}
+
+Example response for "I went for a light jog for 30 minutes":
+{"health": {"currentXP": 20, "speed": 4, "strength": 2}, "message": "Nice easy run! +20 Health XP"}
+
+Example response for "I did intense HIIT training for 30 minutes":
+{"health": {"currentXP": 35, "speed": 6, "strength": 8}, "message": "HIIT is brutal! Great work! +35 Health XP"}
 
 Example response for "I saved $100":
 {"finances": {"currentXP": 20}, "message": "Smart saving! +20 Finance XP"}
 
-Example response for "I read for 2 hours":
-{"intelligence": {"currentXP": 25}, "message": "Knowledge is power! +25 Intelligence XP"}
+Example response for "I invested $100 in index funds":
+{"finances": {"currentXP": 35}, "message": "Investing takes knowledge! +35 Finance XP"}
 
 Now analyze this task: "${task}"`;
 
