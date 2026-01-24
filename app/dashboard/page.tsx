@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import StatCard from '@/components/GameStats/StatCard';
+import FinancesCard from '@/components/GameStats/FinancesCard';
 import HealthCard from '@/components/GameStats/HealthCard';
 import ChatBox from '@/components/ChatBox';
 
@@ -72,8 +73,7 @@ export default function DashboardPage() {
           {/* Left Column - Finances (extended) */}
           <div className="flex flex-col">
             <div className="h-[80vh]">
-              <StatCard
-                title="Finances"
+              <FinancesCard
                 level={stats.finances.level}
                 currentXP={stats.finances.currentXP}
               />
