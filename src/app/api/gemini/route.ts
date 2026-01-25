@@ -393,16 +393,34 @@ The stats are:
 - health: { level, currentXP, strength, speed, nutrition } - for health activities
 - intelligence: { level, currentXP } - for learning activities
 
+=== ACTIVITY TRACKING DATA ===
+For HEALTH activities, you MUST also include an "activityData" object with these fields:
+- For WORKOUTS (strength, cardio, exercise): include { type: "workout", workoutType: "Strength|Cardio|HIIT|Yoga|Other", duration: <minutes>, description: "<short description>" }
+- For NUTRITION activities: include { type: "nutrition", meal: "Breakfast|Lunch|Dinner|Snacks", calories: <estimated calories>, protein: <estimated grams> }
+- For SLEEP activities: include { type: "sleep", hours: <number>, quality: "poor|fair|good|excellent" }
+
+For FINANCIAL activities, include "activityData" object with:
+- { type: "savings", amount: <dollar amount saved> }
+- { type: "investment", amount: <dollar amount>, growth: <percentage> }
+- { type: "budget", category: "<category>", amount: <spent amount> }
+- { type: "debt", amount: <amount paid toward debt> }
+
 Return ONLY a valid JSON object with the stat changes. Use positive numbers for boosts. Only include stats that should change.
 
 Example response for "I ran for 30 minutes":
-{"health": {"currentXP": 30, "speed": 6, "strength": 2}, "message": "Great cardio session! +30 Health XP 🏃"}
+{"health": {"currentXP": 30, "speed": 6, "strength": 2}, "activityData": {"type": "workout", "workoutType": "Cardio", "duration": 30, "description": "Running"}, "message": "Great cardio session! +30 Health XP 🏃"}
 
 Example response for "I did heavy squats and bench press for an hour":
-{"health": {"currentXP": 65, "strength": 12, "speed": 2}, "message": "Beast mode! Heavy lifting pays off! +65 Health XP 💪"}
+{"health": {"currentXP": 65, "strength": 12, "speed": 2}, "activityData": {"type": "workout", "workoutType": "Strength", "duration": 60, "description": "Heavy squats and bench press"}, "message": "Beast mode! Heavy lifting pays off! +65 Health XP 💪"}
+
+Example response for "I ate 1500 calories with 80g protein today":
+{"health": {"currentXP": 15, "nutrition": 6}, "activityData": {"type": "nutrition", "meal": "Daily Total", "calories": 1500, "protein": 80}, "message": "Great nutrition tracking! +15 Health XP 🥗"}
 
 Example response for "I ate a healthy breakfast with eggs and vegetables":
-{"health": {"currentXP": 12, "nutrition": 5}, "message": "Fueling your body right! +12 Health XP 🥗"}
+{"health": {"currentXP": 12, "nutrition": 5}, "activityData": {"type": "nutrition", "meal": "Breakfast", "calories": 450, "protein": 25}, "message": "Fueling your body right! +12 Health XP 🥗"}
+
+Example response for "I saved $200 this week":
+{"finances": {"currentXP": 35}, "activityData": {"type": "savings", "amount": 200}, "message": "Great saving habit! +35 Finance XP 💰"}
 
 Now analyze this task: "${task}"`;
 
