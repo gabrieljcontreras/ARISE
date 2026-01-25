@@ -1,6 +1,6 @@
 # ARISE 🚀
 
-**Gamifying Ypur Growth.**
+**Gamifying Your Growth.**
 
 ARISE is an interactive web application designed to help users track their financial and physical health through gamification. By rewarding wise choices and penalizing poor ones with an experience-based leveling system, ARISE transforms the "chore" of self-improvement into an engaging RPG-like experience.
 
