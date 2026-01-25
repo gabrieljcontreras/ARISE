@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Swords, Heart, ArrowLeft, ChevronRight } from 'lucide-react';
 import ChatBox from '@/components/ChatBox';
 
@@ -100,6 +100,40 @@ interface DailyQuest {
   category: 'financial' | 'health';
 }
 
+// Budget Goal interface
+interface BudgetGoal {
+  id: string;
+  category: string;
+  amount: number;
+  currentSpending: number;
+  period: string;
+  status: string;
+}
+
+// Capital One data interface
+interface CapitalOneData {
+  currentBalance: number;
+  savings: {
+    totalSavedThisMonth: number;
+    totalDeposits: number;
+  };
+  budget: {
+    totalSpentThisMonth: number;
+    totalSpentThisWeek: number;
+    spendingByCategory: Record<string, number>;
+    weeklySpending: Record<string, number>;
+    transactionCount: number;
+  };
+  recentTransactions: Array<{
+    id: string;
+    description: string;
+    amount: number;
+    date: string;
+    category: string;
+    merchantName: string;
+  }>;
+}
+
 export default function DashboardPage() {
   const [view, setView] = useState<ViewState>('landing');
   const [expandedStat, setExpandedStat] = useState<ExpandedStat>(null);
@@ -112,6 +146,13 @@ export default function DashboardPage() {
   const [nutritionLog, setNutritionLog] = useState<NutritionActivity[]>([]);
   const [sleepLog, setSleepLog] = useState<SleepActivity[]>([]);
   const [financialActivities, setFinancialActivities] = useState<(SavingsActivity | InvestmentActivity | BudgetActivity | DebtActivity)[]>([]);
+  
+  // Capital One data state
+  const [capitalOneData, setCapitalOneData] = useState<CapitalOneData | null>(null);
+  const [capitalOneLoading, setCapitalOneLoading] = useState(true);
+  
+  // Budget goals state
+  const [budgetGoals, setBudgetGoals] = useState<BudgetGoal[]>([]);
   
   const [stats, setStats] = useState({
     finances: { 
@@ -132,6 +173,56 @@ export default function DashboardPage() {
     },
     intelligence: { level: 1, currentXP: 0 },
   });
+
+  // Fetch Capital One data function (can be called manually)
+  const fetchCapitalOneData = async () => {
+    try {
+      setCapitalOneLoading(true);
+      const response = await fetch('/api/capital-one-data');
+      const data = await response.json();
+      if (data.success) {
+        setCapitalOneData(data.data);
+        // Update stats with Capital One data
+        setStats(prev => ({
+          ...prev,
+          finances: {
+            ...prev.finances,
+            savings: {
+              ...prev.finances.savings,
+              amount: data.data.currentBalance
+            },
+            budget: {
+              ...prev.finances.budget,
+              spent: data.data.budget.totalSpentThisMonth
+            }
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch Capital One data:', error);
+    } finally {
+      setCapitalOneLoading(false);
+    }
+  };
+
+  // Fetch budget goals
+  const fetchBudgetGoals = async () => {
+    try {
+      const response = await fetch('/api/budget-goals');
+      const data = await response.json();
+      if (data.success) {
+        setBudgetGoals(data.goals);
+      }
+    } catch (error) {
+      console.error('Failed to fetch budget goals:', error);
+    }
+  };
+
+  // Fetch on mount
+  useEffect(() => {
+    fetchCapitalOneData();
+    fetchBudgetGoals();
+  }, []);
 
   const totalXP = ((stats.finances.level - 1) * 100 + stats.finances.currentXP) + 
                   ((stats.health.level - 1) * 100 + stats.health.currentXP) + 
@@ -891,12 +982,23 @@ export default function DashboardPage() {
                   expanded={expandedStat === 'savings'}
                   onClick={() => setExpandedStat(expandedStat === 'savings' ? null : 'savings')}
                 >
-                  <div className="grid grid-cols-2 gap-4">
-                    <DetailCard label="Total Saved" value={`$${stats.finances.savings.amount.toLocaleString()}`} />
-                    <DetailCard label="Monthly Goal" value="$500" />
-                    <DetailCard label="Streak" value="12 weeks" />
-                    <DetailCard label="Next Milestone" value="$6,000" />
-                  </div>
+                  {capitalOneLoading ? (
+                    <div className="text-center py-4 text-gray-400">Loading account data...</div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <DetailCard label="Account Balance" value={`$${stats.finances.savings.amount.toLocaleString()}`} />
+                        <DetailCard label="Saved This Month" value={`$${capitalOneData?.savings.totalSavedThisMonth.toLocaleString() || 0}`} positive />
+                      </div>
+                      {capitalOneData && capitalOneData.savings.totalDeposits > 0 && (
+                        <div className="p-3 rounded-xl bg-[#00d9ff]/10 border border-[#00d9ff]/30">
+                          <p className="text-sm text-gray-300">
+                            💰 <span className="text-[#00d9ff] font-medium">{capitalOneData.savings.totalDeposits} deposits</span> this month
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </InteractiveStat>
 
                 {/* Budget Stat */}
@@ -910,24 +1012,80 @@ export default function DashboardPage() {
                   expanded={expandedStat === 'budget'}
                   onClick={() => setExpandedStat(expandedStat === 'budget' ? null : 'budget')}
                 >
-                  <div className="grid grid-cols-2 gap-4">
-                    <DetailCard label="Spent This Month" value={`$${stats.finances.budget.spent.toLocaleString()}`} />
-                    <DetailCard label="Budget Limit" value={`$${stats.finances.budget.limit.toLocaleString()}`} />
-                    <DetailCard label="Remaining" value={`$${(stats.finances.budget.limit - stats.finances.budget.spent).toLocaleString()}`} />
-                    <DetailCard label="On Track" value="✓ Yes" />
-                  </div>
-                  <div className="mt-4">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-400">Budget Usage</span>
-                      <span className="text-[#0099ff]">{Math.round((stats.finances.budget.spent / stats.finances.budget.limit) * 100)}%</span>
+                  {capitalOneLoading ? (
+                    <div className="text-center py-4 text-gray-400">Loading spending data...</div>
+                  ) : (
+                    <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                      {/* Refresh Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fetchCapitalOneData();
+                          fetchBudgetGoals();
+                        }}
+                        className="w-full py-2 px-3 rounded-lg bg-[#0099ff]/20 border border-[#0099ff]/30 text-[#0099ff] text-sm font-medium hover:bg-[#0099ff]/30 transition-colors flex items-center justify-center gap-2"
+                      >
+                        🔄 Refresh Transactions
+                      </button>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <DetailCard label="Spent This Month" value={`$${stats.finances.budget.spent.toLocaleString()}`} />
+                        <DetailCard label="Spent This Week" value={`$${capitalOneData?.budget.totalSpentThisWeek.toLocaleString() || 0}`} />
+                        <DetailCard label="Transactions" value={`${capitalOneData?.budget.transactionCount || 0}`} />
+                        <DetailCard label="Budget Limit" value={`$${stats.finances.budget.limit.toLocaleString()}`} />
+                      </div>
+                      
+                      {/* Spending by Category */}
+                      {capitalOneData && Object.keys(capitalOneData.budget.spendingByCategory).length > 0 && (
+                        <div className="mt-4">
+                          <h4 className="text-sm font-medium text-gray-300 mb-3">Spending by Category</h4>
+                          <div className="space-y-2">
+                            {Object.entries(capitalOneData.budget.spendingByCategory)
+                              .sort(([,a], [,b]) => b - a)
+                              .slice(0, 5)
+                              .map(([category, amount]) => (
+                                <div key={category} className="flex justify-between items-center">
+                                  <span className="text-gray-400 capitalize text-sm">{category}</span>
+                                  <span className="text-white font-medium">${amount.toLocaleString()}</span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Recent Transactions */}
+                      {capitalOneData && capitalOneData.recentTransactions.length > 0 && (
+                        <div className="mt-4">
+                          <h4 className="text-sm font-medium text-gray-300 mb-3">Recent Transactions</h4>
+                          <div className="space-y-2">
+                            {capitalOneData.recentTransactions.map((tx) => (
+                              <div key={tx.id} className="flex justify-between items-center p-2 rounded-lg bg-white/5">
+                                <div>
+                                  <span className="text-white text-sm">{tx.merchantName}</span>
+                                  <span className="text-gray-500 text-xs block capitalize">{tx.category}</span>
+                                </div>
+                                <span className="text-red-400 font-medium">-${tx.amount.toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-4">
+                        <div className="flex justify-between text-sm mb-2">
+                          <span className="text-gray-400">Budget Usage</span>
+                          <span className="text-[#0099ff]">{stats.finances.budget.limit > 0 ? Math.round((stats.finances.budget.spent / stats.finances.budget.limit) * 100) : 0}%</span>
+                        </div>
+                        <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-[#00d9ff] to-[#0099ff] rounded-full"
+                            style={{ width: `${Math.min((stats.finances.budget.spent / stats.finances.budget.limit) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
                     </div>
-                    <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-[#00d9ff] to-[#0099ff] rounded-full"
-                        style={{ width: `${(stats.finances.budget.spent / stats.finances.budget.limit) * 100}%` }}
-                      />
-                    </div>
-                  </div>
+                  )}
                 </InteractiveStat>
 
                 {/* Investments Stat */}
@@ -949,22 +1107,75 @@ export default function DashboardPage() {
                   </div>
                 </InteractiveStat>
 
-                {/* Debt Reduction Stat */}
+                {/* Limit Master Stat */}
                 <InteractiveStat
                   id="debts"
-                  title="Debt Slayer"
-                  icon="⚔️"
+                  title="Limit Master"
+                  icon="🎯"
                   level={stats.finances.debts.level}
                   xp={stats.finances.debts.currentXP}
                   color="#f59e0b"
                   expanded={expandedStat === 'debts'}
                   onClick={() => setExpandedStat(expandedStat === 'debts' ? null : 'debts')}
                 >
-                  <div className="grid grid-cols-2 gap-4">
-                    <DetailCard label="Remaining Debt" value={`$${stats.finances.debts.remaining.toLocaleString()}`} />
-                    <DetailCard label="Paid Off" value={`$${stats.finances.debts.paid.toLocaleString()}`} positive />
-                    <DetailCard label="Progress" value={`${Math.round((stats.finances.debts.paid / (stats.finances.debts.paid + stats.finances.debts.remaining)) * 100)}%`} />
-                    <DetailCard label="Est. Payoff" value="8 months" />
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                    {/* Refresh Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fetchBudgetGoals();
+                      }}
+                      className="w-full py-2 px-3 rounded-lg bg-[#f59e0b]/20 border border-[#f59e0b]/30 text-[#f59e0b] text-sm font-medium hover:bg-[#f59e0b]/30 transition-colors flex items-center justify-center gap-2"
+                    >
+                      🔄 Refresh Limits
+                    </button>
+
+                    {/* Budget Goals */}
+                    {budgetGoals.length > 0 ? (
+                      <div className="space-y-3">
+                        {budgetGoals.map((goal) => {
+                          const percentUsed = Math.round((goal.currentSpending / goal.amount) * 100);
+                          const isOver = percentUsed > 100;
+                          const isWarning = percentUsed >= 75 && percentUsed < 90;
+                          const isDanger = percentUsed >= 90;
+                          
+                          return (
+                            <div key={goal.id} className="p-3 rounded-lg bg-white/5 border border-white/10">
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-white text-sm capitalize font-medium">{goal.category}</span>
+                                <span className={`text-sm font-medium ${
+                                  isOver ? 'text-red-400' : isDanger ? 'text-orange-400' : isWarning ? 'text-yellow-400' : 'text-[#f59e0b]'
+                                }`}>
+                                  ${goal.currentSpending.toFixed(2)} / ${goal.amount.toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all ${
+                                    isOver ? 'bg-red-500' : isDanger ? 'bg-orange-500' : isWarning ? 'bg-yellow-500' : 'bg-gradient-to-r from-amber-400 to-orange-500'
+                                  }`}
+                                  style={{ width: `${Math.min(percentUsed, 100)}%` }}
+                                />
+                              </div>
+                              <div className="flex justify-between mt-1">
+                                <span className="text-xs text-gray-500 capitalize">{goal.period}</span>
+                                <span className={`text-xs ${
+                                  isOver ? 'text-red-400' : isDanger ? 'text-orange-400' : isWarning ? 'text-yellow-400' : 'text-gray-500'
+                                }`}>
+                                  {isOver ? `Over by $${(goal.currentSpending - goal.amount).toFixed(2)}` : `${percentUsed}% used`}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-gray-400">
+                        <p className="text-2xl mb-2">🎯</p>
+                        <p className="text-sm">No spending limits set</p>
+                        <p className="text-xs mt-1">Use the chat to set limits like &quot;limit dining to $100 this week&quot;</p>
+                      </div>
+                    )}
                   </div>
                 </InteractiveStat>
               </div>
