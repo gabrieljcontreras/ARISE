@@ -8,6 +8,69 @@ const MODELS = [
   "gemma-3-27b-it"
 ];
 
+// Settings update patterns - for changing budget limits, goals, etc.
+const SETTINGS_PATTERNS = {
+  budgetLimit: [
+    /set\s+(my\s+)?budget\s*(limit)?\s*(to)?\s*\$?(\d+)/i,
+    /change\s+(my\s+)?budget\s*(limit)?\s*(to)?\s*\$?(\d+)/i,
+    /update\s+(my\s+)?budget\s*(limit)?\s*(to)?\s*\$?(\d+)/i,
+    /increase\s+(my\s+)?budget\s*(limit)?\s*(to)?\s*\$?(\d+)/i,
+    /my\s+budget\s*(limit)?\s*(is|should\s+be)\s*\$?(\d+)/i,
+    /budget\s*(limit)?\s*(of|is|to|=|:)\s*\$?(\d+)/i,
+    /new\s+budget\s*(limit)?\s*(is|of)?\s*\$?(\d+)/i,
+    /\$?(\d+)\s+(budget|monthly\s+budget|spending\s+limit)/i,
+    /make\s+(my\s+)?budget\s*\$?(\d+)/i,
+  ],
+  savingsGoal: [
+    /set\s+(my\s+)?savings\s*goal\s*(to)?\s*\$?(\d+)/i,
+    /save\s*\$?(\d+)\s*(per|a|each)?\s*month/i,
+    /monthly\s+savings\s*(goal)?\s*(of|to|is)?\s*\$?(\d+)/i,
+  ],
+  calorieGoal: [
+    /set\s+(my\s+)?(daily\s+)?calorie\s*(goal|limit|target)?\s*(to)?\s*(\d+)/i,
+    /(\d+)\s+calories?\s*(per|a)?\s*day/i,
+    /my\s+calorie\s*(goal|limit|target)?\s*(is|should\s+be)?\s*(\d+)/i,
+  ],
+  proteinGoal: [
+    /set\s+(my\s+)?(daily\s+)?protein\s*(goal|target)?\s*(to)?\s*(\d+)/i,
+    /(\d+)\s*g(rams)?\s*(of\s+)?protein/i,
+    /protein\s*(goal|target)?\s*(of|to|is)?\s*(\d+)/i,
+  ],
+  sleepGoal: [
+    /set\s+(my\s+)?sleep\s*(goal|target)?\s*(to)?\s*(\d+)/i,
+    /sleep\s*(\d+)\s*hours?/i,
+    /(\d+)\s*hours?\s*(of\s+)?sleep/i,
+  ],
+};
+
+// Detect settings update requests
+function detectSettingsUpdate(text: string): {
+  isSettingsUpdate: boolean;
+  type?: 'budgetLimit' | 'savingsGoal' | 'calorieGoal' | 'proteinGoal' | 'sleepGoal';
+  value?: number;
+} | null {
+  const lowerText = text.toLowerCase();
+  
+  for (const [settingType, patterns] of Object.entries(SETTINGS_PATTERNS)) {
+    for (const pattern of patterns) {
+      const match = lowerText.match(pattern);
+      if (match) {
+        // Extract the number from the match
+        const numMatch = match[0].match(/\d+/);
+        if (numMatch) {
+          return {
+            isSettingsUpdate: true,
+            type: settingType as 'budgetLimit' | 'savingsGoal' | 'calorieGoal' | 'proteinGoal' | 'sleepGoal',
+            value: parseInt(numMatch[0], 10)
+          };
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
 // Budget goal detection patterns
 const BUDGET_PATTERNS = [
   /spend\s*(no more than|less than|under|at most|max(imum)?|only)\s*\$?(\d+)/i,
@@ -224,6 +287,50 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
+
+    // Check for settings updates FIRST (budget limit, goals, etc.)
+    const settingsUpdate = detectSettingsUpdate(task);
+    
+    if (settingsUpdate && settingsUpdate.isSettingsUpdate && settingsUpdate.type && settingsUpdate.value) {
+      const typeLabels: Record<string, string> = {
+        budgetLimit: 'budget limit',
+        savingsGoal: 'savings goal',
+        calorieGoal: 'daily calorie goal',
+        proteinGoal: 'daily protein goal',
+        sleepGoal: 'sleep goal'
+      };
+      
+      const typeEmojis: Record<string, string> = {
+        budgetLimit: '💰',
+        savingsGoal: '🏦',
+        calorieGoal: '🍎',
+        proteinGoal: '💪',
+        sleepGoal: '😴'
+      };
+      
+      const units: Record<string, string> = {
+        budgetLimit: '$',
+        savingsGoal: '$',
+        calorieGoal: ' calories',
+        proteinGoal: 'g protein',
+        sleepGoal: ' hours'
+      };
+      
+      const label = typeLabels[settingsUpdate.type];
+      const emoji = typeEmojis[settingsUpdate.type];
+      const unit = units[settingsUpdate.type];
+      const valueDisplay = settingsUpdate.type === 'budgetLimit' || settingsUpdate.type === 'savingsGoal' 
+        ? `$${settingsUpdate.value.toLocaleString()}` 
+        : `${settingsUpdate.value}${unit}`;
+      
+      return NextResponse.json({
+        settingsUpdate: {
+          type: settingsUpdate.type,
+          value: settingsUpdate.value
+        },
+        message: `${emoji} Updated! Your ${label} is now ${valueDisplay}. I'll track your progress against this new target!`
+      });
+    }
 
     // Check if this is a quest creation request FIRST
     const questCreation = detectQuestCreation(task, questType);

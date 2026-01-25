@@ -23,6 +23,10 @@ interface StatChanges {
     xp: number;
     category: 'financial' | 'health';
   };
+  settingsUpdate?: {
+    type: 'budgetLimit' | 'savingsGoal' | 'calorieGoal' | 'proteinGoal' | 'sleepGoal';
+    value: number;
+  };
 }
 
 interface BudgetGoal {
@@ -103,14 +107,15 @@ export default function ChatBox({ onStatChange, questType = 'health', onBudgetGo
       const data = await response.json();
       
       if (data.message) {
-        // Check if this was a budget goal response or quest creation
+        // Check if this was a budget goal response, quest creation, or settings update
         const isBudgetGoal = data.budgetGoal?.created;
         const isQuestCreated = data.dailyQuest?.created;
+        const isSettingsUpdate = data.settingsUpdate?.type;
         
         setMessages(prev => [...prev, { 
           role: 'assistant', 
           content: data.message,
-          type: isBudgetGoal ? 'budget' : isQuestCreated ? 'budget' : 'normal'
+          type: isBudgetGoal ? 'budget' : isQuestCreated ? 'budget' : isSettingsUpdate ? 'budget' : 'normal'
         }]);
         
         // If budget goal was created, refresh goals list
@@ -122,6 +127,14 @@ export default function ChatBox({ onStatChange, questType = 'health', onBudgetGo
         // If quest was created, call the callback
         if (isQuestCreated && data.dailyQuest) {
           onQuestCreated?.(data.dailyQuest);
+        }
+        
+        // If settings were updated, play a confirmation sound
+        if (isSettingsUpdate) {
+          const soundSystem = getSoundSystem();
+          if (soundSystem) {
+            soundSystem.playSound('xp_gain').catch(() => {});
+          }
         }
         
         // Trigger sound effects based on stat changes
