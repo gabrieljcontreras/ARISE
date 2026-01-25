@@ -73,7 +73,7 @@
       "id": "mkt1o0ybtotxxt7fsv",
       "goalType": "limit",
       "category": "other",
-      "amount": 1500,
+      "amount": 500,
       "period": "month",
       "startDate": "2026-01-25T01:12:56.531Z",
       "endDate": "2026-02-25T01:12:56.531Z",
@@ -87,7 +87,7 @@
       "alertsTriggered": [],
       "status": "active",
       "createdAt": "2026-01-25T01:12:56.531Z",
-      "updatedAt": "2026-01-25T01:15:21.347Z"
+      "updatedAt": "2026-01-25T02:24:25.581Z"
     }
   ]
 }

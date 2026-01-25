@@ -732,22 +732,18 @@ export default function DashboardPage() {
                       style={{ width: `${stats.finances.currentXP}%` }}
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="grid grid-cols-3 gap-2 text-xs">
                     <div className="p-2 rounded-lg bg-white/5">
                       <span className="text-gray-400">Savings</span>
-                      <p className="text-white font-bold">${stats.finances.savings.amount.toLocaleString()}</p>
+                      <p className="text-white font-bold">${Math.round(stats.finances.savings.amount).toLocaleString()}</p>
                     </div>
                     <div className="p-2 rounded-lg bg-white/5">
                       <span className="text-gray-400">Budget</span>
-                      <p className="text-white font-bold">${stats.finances.budget.limit - stats.finances.budget.spent} left</p>
+                      <p className="text-white font-bold">${Math.round(stats.finances.budget.limit - stats.finances.budget.spent)} left</p>
                     </div>
                     <div className="p-2 rounded-lg bg-white/5">
                       <span className="text-gray-400">Investments</span>
-                      <p className="text-[#00ff88] font-bold">+{stats.finances.investments.growth}%</p>
-                    </div>
-                    <div className="p-2 rounded-lg bg-white/5">
-                      <span className="text-gray-400">Debt Progress</span>
-                      <p className="text-white font-bold">{Math.round((stats.finances.debts.paid / (stats.finances.debts.paid + stats.finances.debts.remaining)) * 100)}%</p>
+                      <p className="text-[#00ff88] font-bold">+{Math.round(stats.finances.investments.growth)}%</p>
                     </div>
                   </div>
                 </div>
@@ -810,11 +806,11 @@ export default function DashboardPage() {
                     </div>
                     <div className="p-2 rounded-lg bg-white/5">
                       <span className="text-gray-400">Nutrition</span>
-                      <p className="text-white font-bold">{stats.health.nutrition.calories} cal</p>
+                      <p className="text-white font-bold">{Math.round(stats.health.nutrition.calories).toLocaleString()} cal</p>
                     </div>
                     <div className="p-2 rounded-lg bg-white/5">
                       <span className="text-gray-400">Sleep Quality</span>
-                      <p className="text-[#00ff88] font-bold">{stats.health.sleep.quality}%</p>
+                      <p className="text-[#00ff88] font-bold">{Math.round(stats.health.sleep.quality)}%</p>
                     </div>
                   </div>
                 </div>

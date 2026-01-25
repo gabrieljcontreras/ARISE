@@ -123,9 +123,32 @@ function detectBudgetGoal(text: string): {
 } | null {
   const lowerText = text.toLowerCase();
   
-  // Check if this looks like a budget goal
-  const budgetKeywords = ['spend', 'budget', 'limit', 'save', 'cut', 'reduce', 'no more than', 'less than'];
+  // FIRST: Check if this is a PAST activity (not a goal) - these should award XP, not create goals
+  const pastActivityPatterns = [
+    /i\s+saved\s+\$?\d+/i,           // "I saved $500"
+    /i\s+put\s+(away|aside)\s+\$?\d+/i, // "I put away $200"
+    /saved\s+\$?\d+\s+(today|yesterday|this week|this month)/i,
+    /i\s+(just\s+)?deposited\s+\$?\d+/i,
+    /i\s+invested\s+\$?\d+/i,
+    /i\s+paid\s+(off|down)\s+\$?\d+/i,
+    /i\s+transferred\s+\$?\d+/i,
+  ];
+  
+  const isPastActivity = pastActivityPatterns.some(pattern => pattern.test(lowerText));
+  if (isPastActivity) {
+    return null; // Let this be handled as a regular activity that awards XP
+  }
+  
+  // Check if this looks like a budget goal (future intention)
+  const budgetKeywords = ['spend', 'budget', 'limit', 'cut', 'reduce', 'no more than', 'less than'];
+  // Note: removed 'save' from keywords - only match "save X on Y" pattern below
   const hasBudgetIntent = budgetKeywords.some(kw => lowerText.includes(kw));
+  
+  // Special case: "save X on Y" is a budget goal, but "I saved X" is a past activity
+  const isSaveOnPattern = /save\s+\$?\d+\s+(on|per|a|each)/i.test(lowerText);
+  const isWantToSave = /(want|going|plan|trying|need)\s+to\s+save/i.test(lowerText);
+  
+  if (!hasBudgetIntent && !isSaveOnPattern && !isWantToSave) return null;
   
   if (!hasBudgetIntent) return null;
 
