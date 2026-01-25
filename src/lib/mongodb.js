@@ -1,7 +1,11 @@
 // MongoDB connection singleton
 import mongoose from 'mongoose';
 
-const MONGODB_URI = 'mongodb+srv://gjcm2007_db_user:0NzrHQzXX2q5GlpV@cluster0.zjjydmh.mongodb.net/?appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://gjcm2007_db_user:0NzrHQzXX2q5GlpV@cluster0.zjjydmh.mongodb.net/?appName=Cluster0';
+
+if (!MONGODB_URI) {
+  throw new Error('Please define the MONGODB_URI environment variable');
+}
 
 /**
  * Global is used here to maintain a cached connection across hot reloads
