@@ -4,6 +4,65 @@ import { useState } from 'react';
 import { Swords, Heart, ArrowLeft, ChevronRight } from 'lucide-react';
 import ChatBox from '@/components/ChatBox';
 
+// Activity data types from Gemini API
+interface WorkoutActivity {
+  type: 'workout';
+  workoutType: string;
+  duration: number;
+  description: string;
+  xp: number;
+  timestamp: Date;
+}
+
+interface NutritionActivity {
+  type: 'nutrition';
+  meal: string;
+  calories: number;
+  protein: number;
+  xp: number;
+  timestamp: Date;
+}
+
+interface SleepActivity {
+  type: 'sleep';
+  hours: number;
+  quality: string;
+  xp: number;
+  timestamp: Date;
+}
+
+interface SavingsActivity {
+  type: 'savings';
+  amount: number;
+  xp: number;
+  timestamp: Date;
+}
+
+interface InvestmentActivity {
+  type: 'investment';
+  amount: number;
+  growth: number;
+  xp: number;
+  timestamp: Date;
+}
+
+interface BudgetActivity {
+  type: 'budget';
+  category: string;
+  amount: number;
+  xp: number;
+  timestamp: Date;
+}
+
+interface DebtActivity {
+  type: 'debt';
+  amount: number;
+  xp: number;
+  timestamp: Date;
+}
+
+type ActivityData = WorkoutActivity | NutritionActivity | SleepActivity | SavingsActivity | InvestmentActivity | BudgetActivity | DebtActivity;
+
 interface StatChanges {
   finances?: { currentXP?: number; level?: number };
   health?: { 
@@ -14,6 +73,20 @@ interface StatChanges {
     nutrition?: number;
   };
   intelligence?: { currentXP?: number; level?: number };
+  activityData?: {
+    type: string;
+    workoutType?: string;
+    duration?: number;
+    description?: string;
+    meal?: string;
+    calories?: number;
+    protein?: number;
+    hours?: number;
+    quality?: string;
+    amount?: number;
+    growth?: number;
+    category?: string;
+  };
 }
 
 type ViewState = 'landing' | 'choose-quest' | 'financial-quest' | 'health-quest';
@@ -33,6 +106,13 @@ export default function DashboardPage() {
   const [completedQuests, setCompletedQuests] = useState<Set<string>>(new Set());
   const [financialQuests, setFinancialQuests] = useState<DailyQuest[]>([]);
   const [healthQuests, setHealthQuests] = useState<DailyQuest[]>([]);
+  
+  // Activity tracking state
+  const [workoutHistory, setWorkoutHistory] = useState<WorkoutActivity[]>([]);
+  const [nutritionLog, setNutritionLog] = useState<NutritionActivity[]>([]);
+  const [sleepLog, setSleepLog] = useState<SleepActivity[]>([]);
+  const [financialActivities, setFinancialActivities] = useState<(SavingsActivity | InvestmentActivity | BudgetActivity | DebtActivity)[]>([]);
+  
   const [stats, setStats] = useState({
     finances: { 
       level: 1, 
@@ -58,20 +138,184 @@ export default function DashboardPage() {
                   ((stats.intelligence.level - 1) * 100 + stats.intelligence.currentXP);
 
   const handleStatChange = (changes: StatChanges) => {
+    // Handle activity data tracking AND XP updates in a single setStats call
+    const activity = changes.activityData;
+    const timestamp = new Date();
+    
+    // Add to activity logs first (these don't affect stats object)
+    if (activity) {
+      const xp = changes.health?.currentXP || changes.finances?.currentXP || 0;
+      
+      switch (activity.type) {
+        case 'workout':
+          setWorkoutHistory(prev => [...prev, {
+            type: 'workout',
+            workoutType: activity.workoutType || 'General',
+            duration: activity.duration || 0,
+            description: activity.description || '',
+            xp,
+            timestamp
+          }]);
+          break;
+        case 'nutrition':
+          setNutritionLog(prev => [...prev, {
+            type: 'nutrition',
+            meal: activity.meal || 'Meal',
+            calories: activity.calories || 0,
+            protein: activity.protein || 0,
+            xp,
+            timestamp
+          }]);
+          break;
+        case 'sleep':
+          setSleepLog(prev => [...prev, {
+            type: 'sleep',
+            hours: activity.hours || 0,
+            quality: activity.quality || 'good',
+            xp,
+            timestamp
+          }]);
+          break;
+        case 'savings':
+        case 'investment':
+        case 'budget':
+        case 'debt':
+          setFinancialActivities(prev => [...prev, {
+            type: activity.type as 'savings' | 'investment' | 'budget' | 'debt',
+            amount: activity.amount || 0,
+            growth: activity.growth,
+            category: activity.category,
+            xp,
+            timestamp
+          } as typeof prev[number]]);
+          break;
+      }
+    }
+    
+    // Now update all stats in a single setStats call
     setStats(prev => {
       const newStats = { ...prev };
       
-      if (changes.finances) {
-        newStats.finances = {
-          ...newStats.finances,
-          currentXP: Math.min(100, Math.max(0, newStats.finances.currentXP + (changes.finances.currentXP || 0))),
-        };
-        if (newStats.finances.currentXP >= 100) {
-          newStats.finances.level += 1;
-          newStats.finances.currentXP -= 100;
+      // Handle activity-specific detailed data updates
+      if (activity) {
+        switch (activity.type) {
+          case 'workout':
+            newStats.health = {
+              ...newStats.health,
+              strength: {
+                ...newStats.health.strength,
+                workouts: newStats.health.strength.workouts + 1
+              }
+            };
+            break;
+          case 'nutrition':
+            newStats.health = {
+              ...newStats.health,
+              nutrition: {
+                ...newStats.health.nutrition,
+                calories: newStats.health.nutrition.calories + (activity.calories || 0),
+                protein: newStats.health.nutrition.protein + (activity.protein || 0)
+              }
+            };
+            break;
+          case 'sleep':
+            const avgHours = sleepLog.length > 0 
+              ? (sleepLog.reduce((sum, s) => sum + s.hours, 0) + (activity.hours || 0)) / (sleepLog.length + 1)
+              : activity.hours || 0;
+            newStats.health = {
+              ...newStats.health,
+              sleep: {
+                ...newStats.health.sleep,
+                avgHours: Math.round(avgHours * 10) / 10
+              }
+            };
+            break;
+          case 'savings':
+            newStats.finances = {
+              ...newStats.finances,
+              savings: {
+                ...newStats.finances.savings,
+                amount: newStats.finances.savings.amount + (activity.amount || 0)
+              }
+            };
+            break;
+          case 'investment':
+            newStats.finances = {
+              ...newStats.finances,
+              investments: {
+                ...newStats.finances.investments,
+                value: newStats.finances.investments.value + (activity.amount || 0),
+                growth: activity.growth || newStats.finances.investments.growth
+              }
+            };
+            break;
+          case 'budget':
+            newStats.finances = {
+              ...newStats.finances,
+              budget: {
+                ...newStats.finances.budget,
+                spent: newStats.finances.budget.spent + (activity.amount || 0)
+              }
+            };
+            break;
+          case 'debt':
+            newStats.finances = {
+              ...newStats.finances,
+              debts: {
+                ...newStats.finances.debts,
+                paid: newStats.finances.debts.paid + (activity.amount || 0)
+              }
+            };
+            break;
         }
       }
       
+      // Handle XP updates for finances
+      if (changes.finances) {
+        let financeXP = newStats.finances.currentXP + (changes.finances.currentXP || 0);
+        let financeLevel = newStats.finances.level;
+        if (financeXP >= 100) {
+          financeLevel += 1;
+          financeXP -= 100;
+        }
+        financeXP = Math.min(100, Math.max(0, financeXP));
+        
+        // Also update sub-stat XP for finances based on activity type
+        let savingsXP = newStats.finances.savings.currentXP;
+        let savingsLevel = newStats.finances.savings.level;
+        let budgetXP = newStats.finances.budget.currentXP;
+        let budgetLevel = newStats.finances.budget.level;
+        let investmentsXP = newStats.finances.investments.currentXP;
+        let investmentsLevel = newStats.finances.investments.level;
+        let debtsXP = newStats.finances.debts.currentXP;
+        let debtsLevel = newStats.finances.debts.level;
+        
+        if (activity?.type === 'savings') {
+          savingsXP += (changes.finances.currentXP || 0);
+          if (savingsXP >= 100) { savingsLevel += 1; savingsXP -= 100; }
+        } else if (activity?.type === 'budget') {
+          budgetXP += (changes.finances.currentXP || 0);
+          if (budgetXP >= 100) { budgetLevel += 1; budgetXP -= 100; }
+        } else if (activity?.type === 'investment') {
+          investmentsXP += (changes.finances.currentXP || 0);
+          if (investmentsXP >= 100) { investmentsLevel += 1; investmentsXP -= 100; }
+        } else if (activity?.type === 'debt') {
+          debtsXP += (changes.finances.currentXP || 0);
+          if (debtsXP >= 100) { debtsLevel += 1; debtsXP -= 100; }
+        }
+        
+        newStats.finances = {
+          ...newStats.finances,
+          level: financeLevel,
+          currentXP: financeXP,
+          savings: { ...newStats.finances.savings, level: savingsLevel, currentXP: Math.min(100, Math.max(0, savingsXP)) },
+          budget: { ...newStats.finances.budget, level: budgetLevel, currentXP: Math.min(100, Math.max(0, budgetXP)) },
+          investments: { ...newStats.finances.investments, level: investmentsLevel, currentXP: Math.min(100, Math.max(0, investmentsXP)) },
+          debts: { ...newStats.finances.debts, level: debtsLevel, currentXP: Math.min(100, Math.max(0, debtsXP)) }
+        };
+      }
+      
+      // Handle XP updates for health
       if (changes.health) {
         let healthXP = newStats.health.currentXP + (changes.health.currentXP || 0);
         let healthLevel = newStats.health.level;
@@ -104,6 +348,18 @@ export default function DashboardPage() {
           nutritionXP -= 100;
         }
         nutritionXP = Math.min(100, Math.max(0, nutritionXP));
+        
+        // Handle sleep XP if it's a sleep activity
+        let sleepXP = newStats.health.sleep.currentXP;
+        let sleepLevel = newStats.health.sleep.level;
+        if (activity?.type === 'sleep') {
+          sleepXP += (changes.health.currentXP || 0);
+          if (sleepXP >= 100) {
+            sleepLevel += 1;
+            sleepXP -= 100;
+          }
+          sleepXP = Math.min(100, Math.max(0, sleepXP));
+        }
 
         newStats.health = {
           ...newStats.health,
@@ -111,19 +367,24 @@ export default function DashboardPage() {
           currentXP: healthXP,
           strength: { ...newStats.health.strength, level: strengthLevel, currentXP: strengthXP },
           speed: { ...newStats.health.speed, level: speedLevel, currentXP: speedXP },
-          nutrition: { ...newStats.health.nutrition, level: nutritionLevel, currentXP: nutritionXP }
+          nutrition: { ...newStats.health.nutrition, level: nutritionLevel, currentXP: nutritionXP },
+          sleep: { ...newStats.health.sleep, level: sleepLevel, currentXP: sleepXP }
         };
       }
       
+      // Handle XP updates for intelligence
       if (changes.intelligence) {
+        let intXP = newStats.intelligence.currentXP + (changes.intelligence.currentXP || 0);
+        let intLevel = newStats.intelligence.level;
+        if (intXP >= 100) {
+          intLevel += 1;
+          intXP -= 100;
+        }
         newStats.intelligence = {
           ...newStats.intelligence,
-          currentXP: Math.min(100, Math.max(0, newStats.intelligence.currentXP + (changes.intelligence.currentXP || 0))),
+          level: intLevel,
+          currentXP: Math.min(100, Math.max(0, intXP)),
         };
-        if (newStats.intelligence.currentXP >= 100) {
-          newStats.intelligence.level += 1;
-          newStats.intelligence.currentXP -= 100;
-        }
       }
       
       return newStats;
@@ -707,6 +968,49 @@ export default function DashboardPage() {
                   </div>
                 </InteractiveStat>
               </div>
+
+              {/* Recent Financial Activity Section */}
+              {financialActivities.length > 0 && (
+                <div className="mt-12 space-y-6">
+                  <h2 
+                    className="font-[family-name:var(--font-orbitron)] text-2xl font-bold text-center"
+                    style={{
+                      background: 'linear-gradient(135deg, #00d9ff 0%, #0099ff 100%)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                    }}
+                  >
+                    📊 Recent Financial Activity
+                  </h2>
+                  
+                  <div 
+                    className="p-6 rounded-2xl border border-[#00d9ff33] max-w-2xl mx-auto"
+                    style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(20px)' }}
+                  >
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {financialActivities.slice(-8).reverse().map((activity, i) => (
+                        <div key={i} className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-[#00d9ff]/20 flex items-center justify-center text-lg">
+                              {activity.type === 'savings' ? '🏦' : 
+                               activity.type === 'investment' ? '📈' : 
+                               activity.type === 'budget' ? '📊' : '⚔️'}
+                            </div>
+                            <div>
+                              <p className="text-white font-medium text-sm capitalize">{activity.type}</p>
+                              <p className="text-gray-500 text-xs">
+                                ${activity.amount.toLocaleString()}
+                                {activity.type === 'investment' && (activity as { growth: number }).growth > 0 && ` • +${(activity as { growth: number }).growth}% growth`}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="font-[family-name:var(--font-orbitron)] text-[#00d9ff] text-sm">+{activity.xp} XP</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -955,6 +1259,76 @@ export default function DashboardPage() {
                   </div>
                 </InteractiveStat>
               </div>
+
+              {/* Recent Activity Section */}
+              {(workoutHistory.length > 0 || nutritionLog.length > 0) && (
+                <div className="mt-12 space-y-6">
+                  <h2 
+                    className="font-[family-name:var(--font-orbitron)] text-2xl font-bold text-center"
+                    style={{
+                      background: 'linear-gradient(135deg, #00ff88 0%, #00d9ff 100%)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                    }}
+                  >
+                    📊 Recent Activity
+                  </h2>
+                  
+                  <div className="grid lg:grid-cols-2 gap-6">
+                    {/* Workout History */}
+                    {workoutHistory.length > 0 && (
+                      <div 
+                        className="p-6 rounded-2xl border border-[#00ff8833]"
+                        style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(20px)' }}
+                      >
+                        <h3 className="font-[family-name:var(--font-orbitron)] text-lg font-bold mb-4 text-[#00ff88]">💪 Workouts</h3>
+                        <div className="space-y-3 max-h-64 overflow-y-auto">
+                          {workoutHistory.slice(-5).reverse().map((workout, i) => (
+                            <div key={i} className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-[#00ff88]/20 flex items-center justify-center text-lg">
+                                  {workout.workoutType === 'Strength' ? '💪' : workout.workoutType === 'Cardio' ? '🏃' : '🏋️'}
+                                </div>
+                                <div>
+                                  <p className="text-white font-medium text-sm">{workout.description || workout.workoutType}</p>
+                                  <p className="text-gray-500 text-xs">{workout.duration} min • {workout.workoutType}</p>
+                                </div>
+                              </div>
+                              <span className="font-[family-name:var(--font-orbitron)] text-[#00ff88] text-sm">+{workout.xp} XP</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Nutrition Log */}
+                    {nutritionLog.length > 0 && (
+                      <div 
+                        className="p-6 rounded-2xl border border-[#f59e0b33]"
+                        style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(20px)' }}
+                      >
+                        <h3 className="font-[family-name:var(--font-orbitron)] text-lg font-bold mb-4 text-[#f59e0b]">🥗 Nutrition Log</h3>
+                        <div className="space-y-3 max-h-64 overflow-y-auto">
+                          {nutritionLog.slice(-5).reverse().map((meal, i) => (
+                            <div key={i} className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-[#f59e0b]/20 flex items-center justify-center text-lg">
+                                  🍽️
+                                </div>
+                                <div>
+                                  <p className="text-white font-medium text-sm">{meal.meal}</p>
+                                  <p className="text-gray-500 text-xs">{meal.calories} cal • {meal.protein}g protein</p>
+                                </div>
+                              </div>
+                              <span className="font-[family-name:var(--font-orbitron)] text-[#f59e0b] text-sm">+{meal.xp} XP</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
