@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Orbitron, DM_Sans } from "next/font/google";
 import "./globals.css";
+import { StatsProvider } from "@/context/StatsContext";
 
 const orbitron = Orbitron({
   variable: "--font-orbitron",
@@ -29,7 +30,9 @@ export default function RootLayout({
       <body
         className={`${orbitron.variable} ${dmSans.variable} antialiased`}
       >
-        {children}
+        <StatsProvider>
+          {children}
+        </StatsProvider>
       </body>
     </html>
   );
