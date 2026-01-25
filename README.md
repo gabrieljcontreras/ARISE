@@ -1,6 +1,7 @@
 # ARISE 🚀
 
 **Gamifying Your Growth.**
+<img width="1269" height="800" alt="ARISE" src="https://github.com/user-attachments/assets/e3e1fa6b-8382-466d-a6c9-371923c7043e" />
 
 ARISE is an interactive web application designed to help users track their financial and physical health through gamification. By rewarding wise choices and penalizing poor ones with an experience-based leveling system, ARISE transforms the "chore" of self-improvement into an engaging RPG-like experience.
 
