@@ -17,23 +17,33 @@ import {
 
 const CUSTOMER_ID = '69752c2b95150878eafe81ec';
 
-// Category mapping for spending analysis
+// Category mapping for spending analysis - also checks description
 const CATEGORY_MAPPING: Record<string, string[]> = {
-  dining: ['dining', 'restaurant', 'dinner', 'lunch', 'food & drink'],
-  food: ['food', 'takeout', 'fast food'],
-  entertainment: ['entertainment', 'streaming', 'movies', 'games', 'gaming', 'fun'],
-  groceries: ['groceries', 'grocery', 'supermarket'],
-  shopping: ['shopping', 'retail', 'amazon', 'target', 'walmart'],
-  transportation: ['transportation', 'transport', 'gas', 'uber', 'lyft', 'transit'],
+  housing: ['rent', 'mortgage', 'housing', 'monthly rent'],
+  dining: ['dining', 'restaurant', 'dinner', 'lunch', 'food & drink', 'thai palace', 'mcdonalds', 'mcdonald', 'burger', 'pizza', 'sushi', 'chipotle', 'subway', 'wendy', 'taco bell', 'chick-fil-a', 'panera'],
+  food: ['food', 'takeout', 'fast food', 'chocolate', 'snack', 'candy'],
+  entertainment: ['entertainment', 'streaming', 'movies', 'games', 'gaming', 'fun', 'netflix', 'spotify', 'hulu', 'disney', 'headphones', 'electronics'],
+  groceries: ['groceries', 'grocery', 'supermarket', 'publix', 'kroger', 'whole foods', 'trader joe', 'safeway', 'apple at', 'produce'],
+  shopping: ['shopping', 'retail', 'amazon', 'target', 'walmart', 'best buy', 'costco'],
+  transportation: ['transportation', 'transport', 'gas', 'uber', 'lyft', 'transit', 'gas fill', 'shell', 'exxon', 'chevron'],
   subscriptions: ['subscriptions', 'subscription', 'recurring'],
-  coffee: ['coffee', 'cafe', 'coffee shops', 'starbucks'],
+  coffee: ['coffee', 'cafe', 'coffee shops', 'starbucks', 'dunkin', 'pastries', 'bakery'],
   alcohol: ['alcohol', 'bar', 'liquor', 'wine', 'beer'],
-  travel: ['travel', 'airlines', 'hotels', 'vacation'],
+  travel: ['travel', 'airlines', 'hotels', 'vacation', 'airbnb'],
 };
 
-function categorizeByMerchant(merchantCategory: string): string {
+function categorizeTransaction(merchantCategory: string, description: string): string {
   const lowerCategory = merchantCategory.toLowerCase();
+  const lowerDescription = description.toLowerCase();
   
+  // Check description first (more specific)
+  for (const [category, keywords] of Object.entries(CATEGORY_MAPPING)) {
+    if (keywords.some(kw => lowerDescription.includes(kw))) {
+      return category;
+    }
+  }
+  
+  // Then check merchant category
   for (const [category, keywords] of Object.entries(CATEGORY_MAPPING)) {
     if (keywords.some(kw => lowerCategory.includes(kw) || kw.includes(lowerCategory))) {
       return category;
@@ -93,20 +103,24 @@ export async function GET() {
       const amount = purchase.amount || 0;
       
       // Get merchant info for categorization
-      let merchantName = 'Unknown Merchant';
-      let merchantCategory = 'other';
+      let merchantName = purchase.description || 'Unknown Merchant';
+      let merchantCategoryRaw = 'other';
       
       if (purchase.merchant_id) {
         try {
           const merchant = await getMerchant(purchase.merchant_id);
           if (merchant) {
-            merchantName = merchant.name || merchantName;
-            merchantCategory = categorizeByMerchant(merchant.category?.join(' ') || 'other');
+            // Use description first, then merchant name as fallback
+            merchantName = purchase.description || merchant.name || merchantName;
+            merchantCategoryRaw = merchant.category?.join(' ') || 'other';
           }
         } catch {
           // Use defaults
         }
       }
+      
+      // Categorize using both merchant category and description
+      const merchantCategory = categorizeTransaction(merchantCategoryRaw, merchantName);
 
       // Add to recent transactions
       recentTransactions.push({
@@ -140,8 +154,13 @@ export async function GET() {
       }
     }
 
-    // Sort transactions by date (most recent first)
-    recentTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Sort transactions by date (most recent first), then by ID (newer IDs are higher)
+    recentTransactions.sort((a, b) => {
+      const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dateCompare !== 0) return dateCompare;
+      // For same date, sort by ID (newer transactions have lexicographically higher IDs)
+      return b.id.localeCompare(a.id);
+    });
 
     return NextResponse.json({
       success: true,
