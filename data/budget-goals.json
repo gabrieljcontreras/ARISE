@@ -68,6 +68,26 @@
       "status": "active",
       "createdAt": "2026-01-25T00:00:10.928Z",
       "updatedAt": "2026-01-25T00:00:10.928Z"
+    },
+    {
+      "id": "mkt1o0ybtotxxt7fsv",
+      "goalType": "limit",
+      "category": "other",
+      "amount": 1500,
+      "period": "month",
+      "startDate": "2026-01-25T01:12:56.531Z",
+      "endDate": "2026-02-25T01:12:56.531Z",
+      "currentSpending": 0,
+      "alertThresholds": [
+        50,
+        75,
+        90,
+        100
+      ],
+      "alertsTriggered": [],
+      "status": "active",
+      "createdAt": "2026-01-25T01:12:56.531Z",
+      "updatedAt": "2026-01-25T01:15:21.347Z"
     }
   ]
 }

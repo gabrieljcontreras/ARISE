@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Send, Target, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { getSoundSystem } from '@/lib/soundSystem';
 
 interface StatChanges {
   finances?: { currentXP?: number; level?: number };
@@ -121,6 +122,22 @@ export default function ChatBox({ onStatChange, questType = 'health', onBudgetGo
         // If quest was created, call the callback
         if (isQuestCreated && data.dailyQuest) {
           onQuestCreated?.(data.dailyQuest);
+        }
+        
+        // Trigger sound effects based on stat changes
+        const soundSystem = getSoundSystem();
+        if (soundSystem) {
+          const xpChange = (data.finances?.currentXP || 0) + (data.health?.currentXP || 0) + (data.intelligence?.currentXP || 0);
+          const levelUp = (data.finances?.level) || (data.health?.level) || (data.intelligence?.level);
+          
+          if (levelUp) {
+            soundSystem.playSound('level_up').catch(() => {});
+          } else if (xpChange >= 20) {
+            soundSystem.playSound('xp_gain').catch(() => {});
+            soundSystem.playBeep(523.25, 150, 'success');
+          } else if (xpChange > 0) {
+            soundSystem.playSound('xp_gain').catch(() => {});
+          }
         }
         
         onStatChange(data);

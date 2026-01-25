@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Swords, Heart, ArrowLeft, ChevronRight } from 'lucide-react';
 import ChatBox from '@/components/ChatBox';
+import SoundToggle from '@/components/SoundToggle';
+import { getSoundSystem } from '@/lib/soundSystem';
 
 // Activity data types from Gemini API
 interface WorkoutActivity {
@@ -480,9 +482,32 @@ export default function DashboardPage() {
       
       return newStats;
     });
+    
+    // Trigger sound effects based on stat changes
+    const soundSystem = getSoundSystem();
+    if (soundSystem) {
+      const xpChange = (changes.finances?.currentXP || 0) + (changes.health?.currentXP || 0) + (changes.intelligence?.currentXP || 0);
+      const levelUp = (changes.finances?.level) || (changes.health?.level) || (changes.intelligence?.level);
+      
+      if (levelUp) {
+        const statName = changes.finances?.level ? 'Finances' : changes.health?.level ? 'Health' : 'Intelligence';
+        soundSystem.announceStatChange(statName, xpChange, levelUp, 0).catch(() => {});
+      } else if (xpChange >= 20) {
+        soundSystem.playSound('xp_gain').catch(() => {});
+        soundSystem.playBeep(523.25, 150, 'success');
+      } else if (xpChange > 0) {
+        soundSystem.playSound('xp_gain').catch(() => {});
+      }
+    }
   };
 
   const toggleQuestCompletion = (questId: string, xp: number, category: 'financial' | 'health') => {
+    // Play achievement sound
+    const soundSystem = getSoundSystem();
+    if (soundSystem) {
+      soundSystem.playAchievement('Quest Completed').catch(() => {});
+    }
+    
     // Add XP when completing
     if (category === 'financial') {
       handleStatChange({ finances: { currentXP: xp } });
@@ -1545,6 +1570,7 @@ export default function DashboardPage() {
         )}
 
       </main>
+      <SoundToggle />
     </div>
   );
 }
