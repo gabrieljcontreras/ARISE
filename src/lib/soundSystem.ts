@@ -35,7 +35,8 @@ export class SoundSystem {
 
     try {
       const audio = new Audio(sounds[type]);
-      audio.volume = 0.5;
+      // Boost volume for fanfare to make it more celebratory
+      audio.volume = type === 'level_up' ? 0.8 : 0.5;
       await audio.play();
     } catch (error) {
       console.log('Sound playback failed (user may need to interact first):', error);
