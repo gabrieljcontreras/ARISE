@@ -6,6 +6,42 @@ import ChatBox from '@/components/ChatBox';
 import SoundToggle from '@/components/SoundToggle';
 import { getSoundSystem } from '@/lib/soundSystem';
 
+// Storage keys for localStorage persistence
+const STORAGE_KEYS = {
+  STATS: 'arise_stats',
+  WORKOUT_HISTORY: 'arise_workout_history',
+  NUTRITION_LOG: 'arise_nutrition_log',
+  SLEEP_LOG: 'arise_sleep_log',
+  FINANCIAL_ACTIVITIES: 'arise_financial_activities',
+  FINANCIAL_QUESTS: 'arise_financial_quests',
+  HEALTH_QUESTS: 'arise_health_quests',
+  COMPLETED_QUESTS: 'arise_completed_quests'
+};
+
+// Helper to safely parse JSON from localStorage
+function loadFromStorage<T>(key: string, defaultValue: T): T {
+  if (typeof window === 'undefined') return defaultValue;
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.error(`Error loading ${key} from localStorage:`, e);
+  }
+  return defaultValue;
+}
+
+// Helper to save to localStorage
+function saveToStorage<T>(key: string, value: T): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.error(`Error saving ${key} to localStorage:`, e);
+  }
+}
+
 // Activity data types from Gemini API
 interface WorkoutActivity {
   type: 'workout';
@@ -137,6 +173,7 @@ interface CapitalOneData {
 }
 
 export default function DashboardPage() {
+  const [isHydrated, setIsHydrated] = useState(false);
   const [view, setView] = useState<ViewState>('landing');
   const [expandedStat, setExpandedStat] = useState<ExpandedStat>(null);
   const [completedQuests, setCompletedQuests] = useState<Set<string>>(new Set());
@@ -156,11 +193,12 @@ export default function DashboardPage() {
   // Budget goals state
   const [budgetGoals, setBudgetGoals] = useState<BudgetGoal[]>([]);
   
-  const [stats, setStats] = useState({
+  // Default stats structure
+  const DEFAULT_STATS = {
     finances: { 
       level: 1, 
       currentXP: 0,
-      savings: { level: 1, currentXP: 0, amount: 0 },
+      savings: { level: 1, currentXP: 0, amount: 0, savedThisMonth: 0 },
       budget: { level: 1, currentXP: 0, spent: 0, limit: 2000 },
       investments: { level: 1, currentXP: 0, value: 0, growth: 0 },
       debts: { level: 1, currentXP: 0, remaining: 0, paid: 0 }
@@ -174,7 +212,78 @@ export default function DashboardPage() {
       sleep: { level: 1, currentXP: 0, avgHours: 0, quality: 0 }
     },
     intelligence: { level: 1, currentXP: 0 },
-  });
+  };
+  
+  const [stats, setStats] = useState(DEFAULT_STATS);
+
+  // Load all data from localStorage on mount (client-side only)
+  useEffect(() => {
+    setStats(loadFromStorage(STORAGE_KEYS.STATS, DEFAULT_STATS));
+    setWorkoutHistory(loadFromStorage(STORAGE_KEYS.WORKOUT_HISTORY, []));
+    setNutritionLog(loadFromStorage(STORAGE_KEYS.NUTRITION_LOG, []));
+    setSleepLog(loadFromStorage(STORAGE_KEYS.SLEEP_LOG, []));
+    setFinancialActivities(loadFromStorage(STORAGE_KEYS.FINANCIAL_ACTIVITIES, []));
+    setFinancialQuests(loadFromStorage(STORAGE_KEYS.FINANCIAL_QUESTS, []));
+    setHealthQuests(loadFromStorage(STORAGE_KEYS.HEALTH_QUESTS, []));
+    
+    // Load completed quests as array, convert to Set
+    const savedCompleted = loadFromStorage<string[]>(STORAGE_KEYS.COMPLETED_QUESTS, []);
+    setCompletedQuests(new Set(savedCompleted));
+    
+    setIsHydrated(true);
+  }, []);
+
+  // Save stats to localStorage whenever they change
+  useEffect(() => {
+    if (isHydrated) {
+      saveToStorage(STORAGE_KEYS.STATS, stats);
+    }
+  }, [stats, isHydrated]);
+
+  // Save activity logs to localStorage
+  useEffect(() => {
+    if (isHydrated) {
+      saveToStorage(STORAGE_KEYS.WORKOUT_HISTORY, workoutHistory);
+    }
+  }, [workoutHistory, isHydrated]);
+
+  useEffect(() => {
+    if (isHydrated) {
+      saveToStorage(STORAGE_KEYS.NUTRITION_LOG, nutritionLog);
+    }
+  }, [nutritionLog, isHydrated]);
+
+  useEffect(() => {
+    if (isHydrated) {
+      saveToStorage(STORAGE_KEYS.SLEEP_LOG, sleepLog);
+    }
+  }, [sleepLog, isHydrated]);
+
+  useEffect(() => {
+    if (isHydrated) {
+      saveToStorage(STORAGE_KEYS.FINANCIAL_ACTIVITIES, financialActivities);
+    }
+  }, [financialActivities, isHydrated]);
+
+  // Save quests to localStorage
+  useEffect(() => {
+    if (isHydrated) {
+      saveToStorage(STORAGE_KEYS.FINANCIAL_QUESTS, financialQuests);
+    }
+  }, [financialQuests, isHydrated]);
+
+  useEffect(() => {
+    if (isHydrated) {
+      saveToStorage(STORAGE_KEYS.HEALTH_QUESTS, healthQuests);
+    }
+  }, [healthQuests, isHydrated]);
+
+  // Save completed quests (convert Set to array for JSON serialization)
+  useEffect(() => {
+    if (isHydrated) {
+      saveToStorage(STORAGE_KEYS.COMPLETED_QUESTS, Array.from(completedQuests));
+    }
+  }, [completedQuests, isHydrated]);
 
   // Fetch Capital One data function (can be called manually)
   const fetchCapitalOneData = async () => {
@@ -184,21 +293,56 @@ export default function DashboardPage() {
       const data = await response.json();
       if (data.success) {
         setCapitalOneData(data.data);
-        // Update stats with Capital One data
-        setStats(prev => ({
-          ...prev,
-          finances: {
-            ...prev.finances,
-            savings: {
-              ...prev.finances.savings,
-              amount: data.data.currentBalance
-            },
-            budget: {
-              ...prev.finances.budget,
-              spent: data.data.budget.totalSpentThisMonth
-            }
+        // Update stats with Capital One data and calculate Budget Mastery XP
+        setStats(prev => {
+          const spent = data.data.budget.totalSpentThisMonth;
+          const limit = prev.finances.budget.limit;
+          
+          // Calculate budget mastery: XP based on staying under budget
+          // If under 50% of budget: +15 XP, under 75%: +10 XP, under 100%: +5 XP
+          const usagePercent = limit > 0 ? (spent / limit) * 100 : 100;
+          let budgetXPGain = 0;
+          if (usagePercent < 50) budgetXPGain = 15;
+          else if (usagePercent < 75) budgetXPGain = 10;
+          else if (usagePercent < 100) budgetXPGain = 5;
+          
+          let newBudgetXP = Math.min(prev.finances.budget.currentXP + budgetXPGain, 100);
+          let newBudgetLevel = prev.finances.budget.level;
+          if (newBudgetXP >= 100) {
+            newBudgetLevel += 1;
+            newBudgetXP -= 100;
           }
-        }));
+          
+          // Calculate savings mastery: XP based on balance growth
+          const savedThisMonth = data.data.savings.totalSavedThisMonth || 0;
+          let savingsXPGain = Math.min(Math.floor(savedThisMonth / 50), 20); // 1 XP per $50 saved, max 20
+          
+          let newSavingsXP = Math.min(prev.finances.savings.currentXP + savingsXPGain, 100);
+          let newSavingsLevel = prev.finances.savings.level;
+          if (newSavingsXP >= 100) {
+            newSavingsLevel += 1;
+            newSavingsXP -= 100;
+          }
+          
+          return {
+            ...prev,
+            finances: {
+              ...prev.finances,
+              savings: {
+                ...prev.finances.savings,
+                amount: data.data.currentBalance,
+                level: newSavingsLevel,
+                currentXP: Math.min(100, Math.max(0, newSavingsXP))
+              },
+              budget: {
+                ...prev.finances.budget,
+                spent: spent,
+                level: newBudgetLevel,
+                currentXP: Math.min(100, Math.max(0, newBudgetXP))
+              }
+            }
+          };
+        });
       }
     } catch (error) {
       console.error('Failed to fetch Capital One data:', error);
@@ -207,13 +351,47 @@ export default function DashboardPage() {
     }
   };
 
-  // Fetch budget goals
+  // Fetch budget goals and update Limit Master XP
   const fetchBudgetGoals = async () => {
     try {
       const response = await fetch('/api/budget-goals');
       const data = await response.json();
       if (data.success) {
         setBudgetGoals(data.goals);
+        
+        // Calculate Limit Master XP based on budget goal compliance
+        // Each goal under limit adds XP, each goal over limit doesn't add
+        if (data.goals.length > 0) {
+          const goalsUnderLimit = data.goals.filter((goal: BudgetGoal) => 
+            goal.currentSpending <= goal.amount
+          ).length;
+          const complianceRatio = goalsUnderLimit / data.goals.length;
+          
+          // Update debts (Limit Master) XP based on compliance
+          // Also update the level based on accumulated XP
+          setStats(prev => {
+            const xpGain = Math.round(complianceRatio * 25); // Up to 25 XP for full compliance
+            let newXP = Math.min(prev.finances.debts.currentXP + xpGain, 100);
+            let newLevel = prev.finances.debts.level;
+            
+            if (newXP >= 100) {
+              newLevel += 1;
+              newXP -= 100;
+            }
+            
+            return {
+              ...prev,
+              finances: {
+                ...prev.finances,
+                debts: {
+                  ...prev.finances.debts,
+                  level: newLevel,
+                  currentXP: Math.min(100, Math.max(0, newXP))
+                }
+              }
+            };
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to fetch budget goals:', error);
@@ -234,6 +412,9 @@ export default function DashboardPage() {
     // Handle activity data tracking AND XP updates in a single setStats call
     const activity = changes.activityData;
     const timestamp = new Date();
+    
+    console.log('handleStatChange called with:', JSON.stringify(changes, null, 2));
+    console.log('Activity data:', activity);
     
     // Add to activity logs first (these don't affect stats object)
     if (activity) {
@@ -324,13 +505,18 @@ export default function DashboardPage() {
             };
             break;
           case 'savings':
+            console.log('Processing savings activity:', activity);
+            console.log('Current savedThisMonth:', newStats.finances.savings.savedThisMonth);
+            console.log('Adding amount:', activity.amount);
             newStats.finances = {
               ...newStats.finances,
               savings: {
                 ...newStats.finances.savings,
-                amount: newStats.finances.savings.amount + (activity.amount || 0)
+                amount: newStats.finances.savings.amount + (activity.amount || 0),
+                savedThisMonth: (newStats.finances.savings.savedThisMonth || 0) + (activity.amount || 0)
               }
             };
+            console.log('New savedThisMonth:', newStats.finances.savings.savedThisMonth);
             break;
           case 'investment':
             newStats.finances = {
@@ -1009,7 +1195,7 @@ export default function DashboardPage() {
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <DetailCard label="Account Balance" value={`$${stats.finances.savings.amount.toLocaleString()}`} />
-                        <DetailCard label="Saved This Month" value={`$${capitalOneData?.savings.totalSavedThisMonth.toLocaleString() || 0}`} positive />
+                        <DetailCard label="Saved This Month" value={`$${((stats.finances.savings.savedThisMonth || 0) + (capitalOneData?.savings.totalSavedThisMonth || 0)).toLocaleString()}`} positive />
                       </div>
                       {capitalOneData && capitalOneData.savings.totalDeposits > 0 && (
                         <div className="p-3 rounded-xl bg-[#00d9ff]/10 border border-[#00d9ff]/30">
