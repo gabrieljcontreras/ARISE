@@ -71,6 +71,44 @@ const UserSchema = new mongoose.Schema({
     difficulty: { type: String, enum: ['easy', 'normal', 'hard', 'extreme'], default: 'normal' }
   },
 
+  // Google Fit integration
+  googleFit: {
+    accessToken: { type: String, default: null },
+    refreshToken: { type: String, default: null },
+    expiresAt: { type: Date, default: null },
+    connectedAt: { type: Date, default: null },
+    lastSyncedAt: { type: Date, default: null }
+  },
+
+  // Health metrics from Google Fit
+  healthMetrics: {
+    dailySteps: [{
+      date: { type: String },
+      steps: { type: Number },
+      xpGained: { type: Number, default: 0 }
+    }],
+    sleepLog: [{
+      date: { type: String },
+      hours: { type: Number },
+      quality: { type: String }, // 'poor', 'fair', 'good', 'excellent'
+      xpGained: { type: Number, default: 0 }
+    }],
+    heartRateLog: [{
+      date: { type: String },
+      avgBPM: { type: Number },
+      minBPM: { type: Number },
+      maxBPM: { type: Number }
+    }],
+    workoutLog: [{
+      date: { type: String },
+      type: { type: String },
+      duration: { type: Number },
+      calories: { type: Number },
+      xpGained: { type: Number, default: 0 }
+    }],
+    lastDataSync: { type: Date, default: null }
+  },
+
   // Account status
   isActive: {
     type: Boolean,

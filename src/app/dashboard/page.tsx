@@ -398,10 +398,123 @@ export default function DashboardPage() {
     }
   };
 
+  // Google Fit state
+  const [googleFitData, setGoogleFitData] = useState<any | null>(null);
+  const [googleFitLoading, setGoogleFitLoading] = useState(false);
+  const [googleFitConnected, setGoogleFitConnected] = useState(false);
+
+  // Fetch Google Fit data function
+  const fetchGoogleFitData = async () => {
+    try {
+      setGoogleFitLoading(true);
+      const response = await fetch('/api/google-fit');
+      
+      if (response.status === 403) {
+        // Google Fit not connected
+        setGoogleFitConnected(false);
+        return;
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        setGoogleFitData(data);
+        setGoogleFitConnected(true);
+
+        // Award XP based on activity
+        const soundSystem = getSoundSystem();
+        let totalHealthXP = 0;
+
+        // Award XP for steps
+        if (data.xp?.steps > 0) {
+          totalHealthXP += data.xp.steps;
+          soundSystem?.playSound('xp_gain').catch(() => {});
+        }
+
+        // Award XP for sleep
+        if (data.xp?.sleep > 0) {
+          totalHealthXP += data.xp.sleep;
+          soundSystem?.playSound('xp_gain').catch(() => {});
+        }
+
+        // Award XP for workouts
+        if (data.xp?.workouts > 0) {
+          totalHealthXP += data.xp.workouts;
+          soundSystem?.playSound('xp_gain').catch(() => {});
+        }
+
+        // Update health stats with Google Fit XP
+        if (totalHealthXP > 0) {
+          setStats(prev => {
+            let newHealthXP = prev.health.currentXP + totalHealthXP;
+            let newHealthLevel = prev.health.level;
+
+            while (newHealthXP >= 100) {
+              newHealthLevel += 1;
+              newHealthXP -= 100;
+            }
+
+            return {
+              ...prev,
+              health: {
+                ...prev.health,
+                level: newHealthLevel,
+                currentXP: newHealthXP,
+                strength: {
+                  ...prev.health.strength,
+                  workouts: prev.health.strength.workouts + data.metrics?.workoutCount || 0
+                },
+                sleep: {
+                  ...prev.health.sleep,
+                  avgHours: data.metrics?.avgDailySleepHours || prev.health.sleep.avgHours
+                }
+              }
+            };
+          });
+
+          // Announce achievement if enough XP was earned
+          if (totalHealthXP >= 25) {
+            soundSystem?.announceStatChange('health', totalHealthXP).catch(() => {});
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch Google Fit data:', error);
+      setGoogleFitConnected(false);
+    } finally {
+      setGoogleFitLoading(false);
+    }
+  };
+
+  // Connect to Google Fit
+  const handleConnectGoogleFit = async () => {
+    try {
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: 'current-user' }), // TODO: Replace with actual user ID
+      });
+
+      const data = await response.json();
+      if (data.authUrl) {
+        window.location.href = data.authUrl;
+      }
+    } catch (error) {
+      console.error('Failed to initiate Google Fit auth:', error);
+    }
+  };
+
   // Fetch on mount
   useEffect(() => {
     fetchCapitalOneData();
     fetchBudgetGoals();
+    fetchGoogleFitData();
+
+    // Check if just connected from OAuth callback
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('googleFitConnected')) {
+      setGoogleFitConnected(true);
+      window.history.replaceState({}, '', '/dashboard');
+    }
   }, []);
 
   const totalXP = ((stats.finances.level - 1) * 100 + stats.finances.currentXP) + 
@@ -1675,6 +1788,81 @@ export default function DashboardPage() {
                     <DetailCard label="Best Night" value="8.5 hrs" />
                     <DetailCard label="Target" value="8 hrs" />
                   </div>
+                </InteractiveStat>
+
+                {/* Google Fit Integration */}
+                <InteractiveStat
+                  id="googlefit"
+                  title="Google Fit Data"
+                  icon="⌚"
+                  level={googleFitConnected ? 1 : 0}
+                  xp={googleFitData?.xp?.total || 0}
+                  color="#EA4335"
+                  expanded={expandedStat === 'googlefit'}
+                  onClick={() => setExpandedStat(expandedStat === 'googlefit' ? null : 'googlefit')}
+                >
+                  {!googleFitConnected ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-4">
+                      <p className="text-gray-400 text-center text-sm">Connect your Google Fit account to sync health data and earn bonus XP!</p>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleConnectGoogleFit();
+                        }}
+                        className="px-6 py-2 rounded-lg bg-[#EA4335] text-white font-medium hover:bg-[#D33425] transition-colors flex items-center gap-2"
+                      >
+                        📱 Connect Google Fit
+                      </button>
+                    </div>
+                  ) : googleFitLoading ? (
+                    <div className="text-center py-4 text-gray-400">Loading Google Fit data...</div>
+                  ) : googleFitData ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <DetailCard label="Daily Steps" value={`${googleFitData.metrics?.avgDailySteps?.toLocaleString() || 0}`} />
+                        <DetailCard label="Total Steps (7d)" value={`${googleFitData.metrics?.totalSteps?.toLocaleString() || 0}`} positive />
+                        <DetailCard label="Avg Sleep" value={`${googleFitData.metrics?.avgDailySleepHours || 0}h`} />
+                        <DetailCard label="Avg Heart Rate" value={`${googleFitData.metrics?.avgHeartRate || 0} bpm`} />
+                      </div>
+
+                      {/* XP Breakdown */}
+                      <div className="p-3 rounded-xl bg-[#EA4335]/10 border border-[#EA4335]/30 space-y-2">
+                        <p className="text-sm text-gray-300 font-medium">XP Earned from Google Fit:</p>
+                        <div className="text-xs text-gray-400 space-y-1">
+                          {googleFitData.xp?.steps > 0 && <p>📍 Steps: +{googleFitData.xp.steps} XP</p>}
+                          {googleFitData.xp?.sleep > 0 && <p>😴 Sleep: +{googleFitData.xp.sleep} XP</p>}
+                          {googleFitData.xp?.workouts > 0 && <p>🏋️ Workouts: +{googleFitData.xp.workouts} XP</p>}
+                          {googleFitData.xp?.total > 0 && <p className="text-[#EA4335] font-medium">Total: +{googleFitData.xp.total} XP</p>}
+                        </div>
+                      </div>
+
+                      {/* Workouts from Google Fit */}
+                      {googleFitData.workouts?.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-300 mb-2">Recent Workouts</p>
+                          <div className="space-y-2">
+                            {googleFitData.workouts.slice(0, 3).map((workout: any, idx: number) => (
+                              <div key={idx} className="p-2 rounded-lg bg-white/5 text-xs text-gray-400">
+                                {workout.name} • {Math.round(workout.durationMillis / 60000)} min
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fetchGoogleFitData();
+                        }}
+                        className="w-full py-2 px-3 rounded-lg bg-[#EA4335]/20 border border-[#EA4335]/30 text-[#EA4335] text-sm font-medium hover:bg-[#EA4335]/30 transition-colors flex items-center justify-center gap-2"
+                      >
+                        🔄 Sync Google Fit
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-center py-4 text-gray-400 text-sm">No data available. Click "Sync Google Fit" to fetch data.</p>
+                  )}
                 </InteractiveStat>
               </div>
 
