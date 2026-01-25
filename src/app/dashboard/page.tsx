@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Swords, Heart, ArrowLeft, ChevronRight } from 'lucide-react';
 import ChatBox from '@/components/ChatBox';
 
@@ -14,6 +14,15 @@ interface StatChanges {
     nutrition?: number;
   };
   intelligence?: { currentXP?: number; level?: number };
+}
+
+interface BudgetGoal {
+  id: string;
+  category: string;
+  amount: number;
+  currentSpending: number;
+  period: string;
+  status: string;
 }
 
 type ViewState = 'landing' | 'choose-quest' | 'financial-quest' | 'health-quest';
@@ -33,6 +42,7 @@ export default function DashboardPage() {
   const [completedQuests, setCompletedQuests] = useState<Set<string>>(new Set());
   const [financialQuests, setFinancialQuests] = useState<DailyQuest[]>([]);
   const [healthQuests, setHealthQuests] = useState<DailyQuest[]>([]);
+  const [budgetGoals, setBudgetGoals] = useState<BudgetGoal[]>([]);
   const [stats, setStats] = useState({
     finances: { 
       level: 1, 
@@ -52,6 +62,23 @@ export default function DashboardPage() {
     },
     intelligence: { level: 1, currentXP: 0 },
   });
+
+  // Fetch budget goals on mount
+  const fetchBudgetGoals = async () => {
+    try {
+      const response = await fetch('/api/budget-goals');
+      const data = await response.json();
+      if (data.success) {
+        setBudgetGoals(data.goals);
+      }
+    } catch (error) {
+      console.error('Failed to fetch budget goals:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchBudgetGoals();
+  }, []);
 
   const totalXP = ((stats.finances.level - 1) * 100 + stats.finances.currentXP) + 
                   ((stats.health.level - 1) * 100 + stats.health.currentXP) + 
@@ -563,7 +590,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* ChatBox */}
-                  <ChatBox onStatChange={handleStatChange} questType="financial" onQuestCreated={handleQuestCreated} />
+                  <ChatBox onStatChange={handleStatChange} questType="financial" onQuestCreated={handleQuestCreated} onBudgetGoalCreated={fetchBudgetGoals} />
                 </div>
               </div>
 
@@ -649,24 +676,55 @@ export default function DashboardPage() {
                   expanded={expandedStat === 'budget'}
                   onClick={() => setExpandedStat(expandedStat === 'budget' ? null : 'budget')}
                 >
-                  <div className="grid grid-cols-2 gap-4">
-                    <DetailCard label="Spent This Month" value={`$${stats.finances.budget.spent.toLocaleString()}`} />
-                    <DetailCard label="Budget Limit" value={`$${stats.finances.budget.limit.toLocaleString()}`} />
-                    <DetailCard label="Remaining" value={`$${(stats.finances.budget.limit - stats.finances.budget.spent).toLocaleString()}`} />
-                    <DetailCard label="On Track" value="✓ Yes" />
-                  </div>
-                  <div className="mt-4">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-400">Budget Usage</span>
-                      <span className="text-[#0099ff]">{Math.round((stats.finances.budget.spent / stats.finances.budget.limit) * 100)}%</span>
+                  {budgetGoals.length === 0 ? (
+                    <div className="text-center py-4">
+                      <p className="text-gray-400 text-sm">No budget goals set yet.</p>
+                      <p className="text-gray-500 text-xs mt-1">Use the chat to add one: &quot;Limit dining to $100 this week&quot;</p>
                     </div>
-                    <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-[#00d9ff] to-[#0099ff] rounded-full"
-                        style={{ width: `${(stats.finances.budget.spent / stats.finances.budget.limit) * 100}%` }}
-                      />
+                  ) : (
+                    <div className="space-y-4">
+                      {budgetGoals.map((goal) => {
+                        const percentUsed = goal.amount > 0 ? Math.round((goal.currentSpending / goal.amount) * 100) : 0;
+                        const remaining = goal.amount - goal.currentSpending;
+                        const isOverBudget = remaining < 0;
+                        const progressColor = percentUsed >= 100 ? '#ef4444' : percentUsed >= 75 ? '#f59e0b' : '#00d9ff';
+                        
+                        return (
+                          <div key={goal.id} className="p-3 rounded-xl bg-white/5 border border-white/10">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-white font-medium capitalize">{goal.category}</span>
+                              <span className="text-xs text-gray-400 capitalize">{goal.period}ly limit</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                              <div>
+                                <span className="text-gray-400">Spent: </span>
+                                <span className="text-white">${goal.currentSpending.toLocaleString()}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Limit: </span>
+                                <span className="text-white">${goal.amount.toLocaleString()}</span>
+                              </div>
+                            </div>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className={isOverBudget ? 'text-red-400' : 'text-gray-400'}>
+                                {isOverBudget ? `Over by $${Math.abs(remaining)}` : `$${remaining} remaining`}
+                              </span>
+                              <span style={{ color: progressColor }}>{percentUsed}%</span>
+                            </div>
+                            <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{ 
+                                  width: `${Math.min(percentUsed, 100)}%`, 
+                                  background: progressColor 
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
+                  )}
                 </InteractiveStat>
 
                 {/* Investments Stat */}

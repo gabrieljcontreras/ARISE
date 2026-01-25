@@ -10,7 +10,7 @@ const MODELS = [
 
 // Budget goal detection patterns
 const BUDGET_PATTERNS = [
-  /spend\s*(no more than|less than|under|at most|max(imum)?)\s*\$?(\d+)/i,
+  /spend\s*(no more than|less than|under|at most|max(imum)?|only)\s*\$?(\d+)/i,
   /budget\s*\$?(\d+)/i,
   /limit\s*(my|the)?\s*\w*\s*to\s*\$?(\d+)/i,
   /\$?(\d+)\s*(or less|max|limit|budget)/i,
@@ -18,6 +18,10 @@ const BUDGET_PATTERNS = [
   /cut\s*(back|down)\s*(\w+\s*)?\$?(\d+)/i,
   /save\s*\$?(\d+)\s*on/i,
   /reduce\s*(\w+\s*)?spending\s*(by)?\s*\$?(\d+)/i,
+  /spend\s*only\s*\$?(\d+)/i,
+  /only\s*spend\s*\$?(\d+)/i,
+  /(\d+)\s*dollars?\s*(on|for|this)/i,
+  /\$(\d+)\s*(on|for|this)/i,
 ];
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
@@ -67,6 +71,16 @@ function detectQuestCreation(text: string, questType: 'financial' | 'health'): {
   xp?: number;
 } | null {
   const lowerText = text.toLowerCase();
+  
+  // For financial quest type, check if this looks like a budget goal instead
+  // Budget-related phrases should NOT be treated as quests in financial mode
+  if (questType === 'financial') {
+    const budgetKeywords = ['spend', 'budget', 'limit', 'save', 'cut', 'reduce', 'no more than', 'less than', '$', 'dollar'];
+    const hasBudgetIntent = budgetKeywords.some(kw => lowerText.includes(kw));
+    if (hasBudgetIntent) {
+      return null; // Let budget goal detection handle this
+    }
+  }
   
   // Check if this looks like a quest creation request
   const hasQuestIntent = QUEST_PATTERNS.some(pattern => pattern.test(lowerText));
@@ -130,10 +144,15 @@ function detectBudgetGoal(text: string): {
   }
 
   if (!amount) {
-    // Try simple number extraction
-    const simpleMatch = lowerText.match(/\$(\d+)/);
-    if (simpleMatch) {
-      amount = parseInt(simpleMatch[1], 10);
+    // Try simple number extraction - look for $ followed by number or number followed by "dollars"
+    const dollarMatch = lowerText.match(/\$(\d+)/);
+    if (dollarMatch) {
+      amount = parseInt(dollarMatch[1], 10);
+    } else {
+      const wordMatch = lowerText.match(/(\d+)\s*dollars?/);
+      if (wordMatch) {
+        amount = parseInt(wordMatch[1], 10);
+      }
     }
   }
 

@@ -48,6 +48,26 @@
       "status": "exceeded",
       "createdAt": "2026-01-24T22:37:29.739Z",
       "updatedAt": "2026-01-24T22:37:30.417Z"
+    },
+    {
+      "id": "mksz2gfk8q9o1o5zc0k",
+      "goalType": "limit",
+      "category": "entertainment",
+      "amount": 100,
+      "period": "week",
+      "startDate": "2026-01-25T00:00:10.928Z",
+      "endDate": "2026-02-01T00:00:10.928Z",
+      "currentSpending": 0,
+      "alertThresholds": [
+        50,
+        75,
+        90,
+        100
+      ],
+      "alertsTriggered": [],
+      "status": "active",
+      "createdAt": "2026-01-25T00:00:10.928Z",
+      "updatedAt": "2026-01-25T00:00:10.928Z"
     }
   ]
 }
