@@ -314,6 +314,86 @@ Return ONLY the category name, nothing else.`;
       });
     }
 
+    // Check if this is a help/advice/question request (NOT an activity log)
+    const helpPatterns = [
+      /how\s+(can|do|should)\s+i/i,
+      /what\s+(should|can|do)\s+i/i,
+      /can\s+you\s+(help|tell|explain|suggest|recommend|give)/i,
+      /i\s+need\s+(help|advice|tips|suggestions)/i,
+      /any\s+(tips|advice|suggestions|recommendations)/i,
+      /what('s|\s+is)\s+the\s+best\s+(way|method|approach)/i,
+      /how\s+to\s+/i,
+      /ways\s+to\s+/i,
+      /help\s+me\s+(with|to|understand)/i,
+      /i('m|\s+am)\s+(struggling|having\s+trouble|confused|unsure|not\s+sure)/i,
+      /what\s+are\s+some/i,
+      /could\s+you\s+(help|explain|suggest|recommend)/i,
+      /i\s+don('t|'t)\s+know\s+how/i,
+      /where\s+do\s+i\s+start/i,
+      /give\s+me\s+(some|a few)?\s*(tips|advice|ideas)/i,
+      /\?\s*$/,  // Ends with a question mark
+    ];
+    
+    const lowerTask = task.toLowerCase();
+    const isHelpRequest = helpPatterns.some(pattern => pattern.test(task));
+    
+    // Additional check: questions about improvement topics
+    const improvementTopics = [
+      'save money', 'saving', 'budget', 'invest', 'debt', 'spending',
+      'lose weight', 'get fit', 'exercise', 'workout', 'nutrition', 'diet',
+      'eat healthy', 'sleep better', 'motivation', 'discipline', 'habits',
+      'improve', 'better', 'healthier', 'stronger', 'faster'
+    ];
+    const mentionsImprovementTopic = improvementTopics.some(topic => lowerTask.includes(topic));
+    
+    // If it's a help request (not logging an activity they DID)
+    const pastTenseIndicators = ['i did', 'i ran', 'i ate', 'i saved', 'i worked', 'i completed', 'i finished', 'just did', 'just finished', 'today i'];
+    const isPastActivity = pastTenseIndicators.some(indicator => lowerTask.includes(indicator));
+    
+    if (isHelpRequest && !isPastActivity) {
+      // This is a help/advice request - give a thoughtful response
+      const helpPrompt = `Answer this question concisely:
+
+"${task}"
+
+Rules:
+- Give a SHORT, direct answer (3-5 sentences max)
+- One key tip or insight, not a list
+- Be friendly but brief
+- No fluff, no intros like "Great question!"
+- One emoji max at the end if it fits naturally
+
+Just answer directly.`;
+
+      // Try each model until one works
+      let lastError: Error | null = null;
+      for (const modelName of MODELS) {
+        try {
+          const model = genAI.getGenerativeModel({ model: modelName });
+          const result = await model.generateContent(helpPrompt);
+          const helpResponse = result.response.text().trim();
+          
+          if (helpResponse) {
+            return NextResponse.json({
+              message: helpResponse,
+              isAdvice: true
+            });
+          }
+        } catch (error) {
+          lastError = error as Error;
+          console.log(`Help request - Model ${modelName} failed, trying next...`);
+          continue;
+        }
+      }
+      
+      // All models failed - log the error and return fallback
+      console.error('All models failed for help request:', lastError);
+      return NextResponse.json({
+        message: "I'd love to help! Could you tell me a bit more about what you're looking to improve? I can offer tips on budgeting, saving, workouts, nutrition, and building healthy habits. 💪",
+        isAdvice: true
+      });
+    }
+
     // Regular task analysis (existing logic)
     const prompt = `You are a life gamification assistant. Analyze the following task/activity and determine how it should affect the user's stats.
 
