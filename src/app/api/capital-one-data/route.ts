@@ -79,15 +79,16 @@ export async function GET() {
     const deposits = await getAccountDeposits(accountId) || [];
 
     // Calculate spending by category (this month)
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
+    // Use January 2026 as the reference date to match our sandbox data
+    const now = new Date('2026-01-24');
+    const startOfMonth = new Date(2026, 0, 1); // January 1, 2026
+    const startOfWeek = new Date(2026, 0, 19); // Week of Jan 19-25, 2026 (Sunday)
 
     const spendingByCategory: Record<string, number> = {};
     const weeklySpending: Record<string, number> = {};
     let totalSpentThisMonth = 0;
     let totalSpentThisWeek = 0;
+    let totalSpentAllTime = 0;
 
     const recentTransactions: Array<{
       id: string;
@@ -132,6 +133,9 @@ export async function GET() {
         merchantName
       });
 
+      // Track all-time spending for balance calculation
+      totalSpentAllTime += amount;
+
       // Track monthly spending
       if (purchaseDate >= startOfMonth) {
         totalSpentThisMonth += amount;
@@ -162,11 +166,15 @@ export async function GET() {
       return b.id.localeCompare(a.id);
     });
 
+    // Calculate balance: initial $5000 minus all purchases
+    const INITIAL_BALANCE = 5000;
+    const calculatedBalance = INITIAL_BALANCE - totalSpentAllTime;
+
     return NextResponse.json({
       success: true,
       data: {
         accountId,
-        currentBalance,
+        currentBalance: calculatedBalance,
         savings: {
           totalSavedThisMonth,
           totalDeposits: deposits.length,

@@ -309,7 +309,7 @@ export default function FinancialQuestPage() {
                 ) : (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                      <DetailCard label="Account Balance" value={`$${stats.finances.savings.amount.toLocaleString()}`} />
+                      <DetailCard label="Account Balance" value={`$${capitalOneData?.currentBalance?.toLocaleString() || 0}`} />
                       <DetailCard label="Saved This Month" value={`$${capitalOneData?.savings.totalSavedThisMonth.toLocaleString() || 0}`} positive />
                     </div>
                     {capitalOneData && capitalOneData.savings.totalDeposits > 0 && (
@@ -351,7 +351,7 @@ export default function FinancialQuestPage() {
                     </button>
                     
                     <div className="grid grid-cols-2 gap-4">
-                      <DetailCard label="Spent This Month" value={`$${stats.finances.budget.spent.toLocaleString()}`} />
+                      <DetailCard label="Spent This Month" value={`$${capitalOneData?.budget.totalSpentThisMonth.toLocaleString() || 0}`} />
                       <DetailCard label="Spent This Week" value={`$${capitalOneData?.budget.totalSpentThisWeek.toLocaleString() || 0}`} />
                       <DetailCard label="Transactions" value={`${capitalOneData?.budget.transactionCount || 0}`} />
                       <DetailCard label="Budget Limit" value={`$${stats.finances.budget.limit.toLocaleString()}`} />
