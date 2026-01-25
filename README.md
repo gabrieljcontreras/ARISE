@@ -31,7 +31,6 @@ Tracking finance, workouts, and nutrition is often tedious and overwhelming. Mos
 | **AI/LLM** | Google Gemini API |
 | **Financial API** | Capital One |
 | **Audio API** | Eleven Labs |
-| **Auth/DB** | Clerk, Prisma |
 | **Health Monitoring** | Google Fit API |
 
 ---
